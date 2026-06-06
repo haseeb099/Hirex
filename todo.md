@@ -113,12 +113,12 @@
 
 ## v2.1 — ATS CV PDF Improvement
 
-- [ ] LLM CV prompt: structured JSON output (contact, summary, experience[], education[], skills[], keywords[])
-- [ ] Server-side PDF endpoint: /api/cv/download using HTML template
-- [ ] ATS-safe PDF rules: single column, no tables, no graphics, standard fonts, proper heading hierarchy
-- [ ] Section order: Contact → Summary → Experience → Education → Skills → Keywords
-- [ ] Experience bullets: action verb + metric + keyword mirroring from JD
-- [ ] ApplyPage CV tab: live HTML preview before download
-- [ ] One-click "Download ATS CV (PDF)" button wired to server endpoint
-- [ ] Cover letter PDF: matching professional style, one-click download
-- [ ] Vitest tests for CV JSON structure validation
+- [x] LLM CV prompt: structured JSON output (contact, summary, experience[], education[], skills[], keywords[])
+- [x] Server-side PDF endpoint: client-side @react-pdf/renderer (no server endpoint needed — runs in browser)
+- [x] ATS-safe PDF rules: single column, no tables, no graphics, Lato font, proper heading hierarchy
+- [x] Section order: Contact → Summary → Experience → Education → Skills → Keywords
+- [x] Experience bullets: action verb + metric + keyword mirroring from JD (in LLM prompt)
+- [x] ApplyPage CV tab: live HTML preview before download (Preview/Raw toggle)
+- [x] One-click "PDF ↓" button with loading state, wired to @react-pdf/renderer
+- [x] Cover letter PDF: professional A4 layout with sender block, date, Re: line, paragraphs, signature
+- [x] Vitest tests for CV JSON structure validation (41 tests passing, 4 files)
