@@ -1,5 +1,27 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1780756239849,
+      "tag": "0000_flawless_invisible_woman",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1780756481284,
+      "tag": "0001_lethal_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1780756548065,
+      "tag": "0002_ambiguous_argent",
+      "breakpoints": true
+    }
+  ]
 }
