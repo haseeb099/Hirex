@@ -1,11 +1,12 @@
 import { getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { BrainCircuit, ChevronRight, ClipboardList, Sparkles, Zap } from "lucide-react";
+import { BrainCircuit, ChevronRight, ClipboardList, FileText, Sparkles, Zap } from "lucide-react";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 const FEATURES = [
   { icon: Sparkles,     title: "AI Job Scoring",       desc: "LLM scores every listing against your profile — high, medium, or low match." },
+  { icon: FileText,     title: "ATS Apply Kit",         desc: "One-click ATS CV, cover letter, LinkedIn summary & interview prep. Download as PDF." },
   { icon: ClipboardList, title: "Application Tracker", desc: "Full lifecycle: Draft → Applied → Interview → Offer → Rejected." },
   { icon: BrainCircuit, title: "Persistent Memory",    desc: "Past outcomes stored as embeddings improve future recommendations." },
 ];
@@ -27,12 +28,19 @@ export default function LandingPage() {
           <span className="font-mono font-semibold text-sm text-foreground">job-agent</span>
           <span className="font-mono text-xs text-muted-foreground ml-1">v1.0.0</span>
         </div>
-        <a
-          href={getLoginUrl()}
-          className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-mono font-semibold hover:opacity-90 transition-opacity"
-        >
-          Sign in <ChevronRight className="w-3 h-3" />
-        </a>
+        <div className="flex items-center gap-3">
+          <Link href="/pricing">
+            <button className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Pricing
+            </button>
+          </Link>
+          <a
+            href={getLoginUrl()}
+            className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-mono font-semibold hover:opacity-90 transition-opacity"
+          >
+            Sign in <ChevronRight className="w-3 h-3" />
+          </a>
+        </div>
       </header>
 
       {/* Hero */}

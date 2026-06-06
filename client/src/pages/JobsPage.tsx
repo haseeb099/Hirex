@@ -15,9 +15,11 @@ import { toast } from "sonner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RankedJob = {
-  id: number;
+  rank: number;
   matchScore: number | null;
-  matchTier: string | null;
+  tier: string;
+  matchedSkills: string[];
+  missingSkills: string[];
   job: {
     id: number;
     title: string;
@@ -34,7 +36,7 @@ type RankedJob = {
 };
 
 // ── Score Badge ───────────────────────────────────────────────────────────────
-function ScoreBadge({ tier, score }: { tier: string | null; score: number | null }) {
+function ScoreBadge({ tier, score }: { tier: string; score: number | null }) {
   const pct = Math.round(score ?? 0);
   const cls =
     tier === "high"
@@ -83,7 +85,7 @@ function JobCard({
             <span className="font-mono text-[11px] text-muted-foreground truncate">{job.company}</span>
           </div>
         </div>
-        <ScoreBadge tier={ranked.matchTier} score={ranked.matchScore} />
+        <ScoreBadge tier={ranked.tier} score={ranked.matchScore} />
       </div>
 
       <div className="flex items-center gap-3 mb-2 flex-wrap">
@@ -280,7 +282,7 @@ export default function JobsPage() {
   }
 
   const isSearching = refreshMutation.isPending || scoreMutation.isPending;
-  const rankedJobs: RankedJob[] = (rankedQuery.data as RankedJob[] | undefined) ?? [];
+  const rankedJobs: RankedJob[] = (rankedQuery.data ?? []) as RankedJob[];
 
   return (
     <div className="h-full flex overflow-hidden">
@@ -358,10 +360,10 @@ export default function JobsPage() {
               <div className="p-3 space-y-2">
                 {rankedJobs.map((r) => (
                   <JobCard
-                    key={r.id}
+                    key={r.rank}
                     ranked={r}
-                    isSelected={selectedRanked?.id === r.id}
-                    onClick={() => setSelectedRanked(selectedRanked?.id === r.id ? null : r)}
+                    isSelected={selectedRanked?.rank === r.rank}
+                    onClick={() => setSelectedRanked(selectedRanked?.rank === r.rank ? null : r)}
                     onApply={() => r.job && createApp.mutate({ jobId: r.job.id })}
                     onApplyKit={() => r.job && goToApplyKit(r.job)}
                   />
@@ -377,7 +379,7 @@ export default function JobsPage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-[oklch(0.12_0.005_264)] shrink-0">
             <div className="flex items-center gap-2">
-              <ScoreBadge tier={selectedRanked.matchTier} score={selectedRanked.matchScore} />
+              <ScoreBadge tier={selectedRanked.tier} score={selectedRanked.matchScore} />
               <span className="font-mono text-xs text-foreground font-semibold">{selectedRanked.job.title}</span>
               <span className="font-mono text-xs text-muted-foreground">@ {selectedRanked.job.company}</span>
             </div>
@@ -391,7 +393,7 @@ export default function JobsPage() {
                 { label: "location", value: selectedRanked.job.location },
                 { label: "type", value: selectedRanked.job.jobType?.replace("_", " ") },
                 { label: "salary", value: selectedRanked.job.salaryMin ? `$${(selectedRanked.job.salaryMin / 1000).toFixed(0)}k–$${((selectedRanked.job.salaryMax ?? 0) / 1000).toFixed(0)}k` : null },
-                { label: "match", value: `${selectedRanked.matchScore ?? 0}% (${selectedRanked.matchTier})` },
+                { label: "match", value: `${selectedRanked.matchScore ?? 0}% (${selectedRanked.tier})` },
                 { label: "source", value: selectedRanked.job.source },
               ].filter((x) => x.value).map(({ label, value }) => (
                 <div key={label} className="rounded-md p-2.5 bg-card border border-border">
@@ -414,6 +416,32 @@ export default function JobsPage() {
               <div>
                 <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Requirements</p>
                 <p className="font-mono text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{selectedRanked.job.requirements}</p>
+              </div>
+            )}
+
+            {/* Skills chips */}
+            {(selectedRanked.matchedSkills?.length > 0 || selectedRanked.missingSkills?.length > 0) && (
+              <div className="space-y-2">
+                {selectedRanked.matchedSkills?.length > 0 && (
+                  <div>
+                    <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Matched Skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedRanked.matchedSkills.map((s) => (
+                        <span key={s} className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {selectedRanked.missingSkills?.length > 0 && (
+                  <div>
+                    <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Missing Skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedRanked.missingSkills.map((s) => (
+                        <span key={s} className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-red-500/15 text-red-400 border border-red-500/25">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

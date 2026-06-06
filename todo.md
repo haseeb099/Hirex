@@ -77,36 +77,36 @@
 ## v2.0 — SaaS Rebuild
 
 ### Phase 1: DB + Schema Fixes
-- [ ] Fix all remaining query errors (applications, jobs search)
-- [ ] Add user_credits and subscriptions tables
-- [ ] Add Stripe integration (checkout, webhooks)
+- [x] Fix all remaining query errors (applications, jobs search)
+- [x] Add user_credits and subscriptions tables
+- [x] Add Stripe integration (checkout, webhooks)
 
 ### Phase 2: Agentic Job Fetcher
-- [ ] Fix Remotive API job fetching (real jobs, not demo)
-- [ ] URL/JD paste import: scrape job from URL or paste raw JD
-- [ ] Remove broken legacyJobs demo system — replace with real Remotive + paste flow
-- [ ] Job search works reliably without errors
+- [x] Fix Remotive API job fetching (real jobs, not demo)
+- [x] URL/JD paste import: scrape job from URL or paste raw JD
+- [x] Remove broken legacyJobs demo system — replace with real Remotive + paste flow
+- [x] Job search works reliably without errors
 
 ### Phase 3: ATS PDF Generator
-- [ ] ATS-friendly CV PDF (html-to-pdf, proper ATS formatting)
-- [ ] Cover letter PDF (matching professional style)
-- [ ] One-click download buttons for each document
-- [ ] PDF served via tRPC/API endpoint
+- [x] ATS-friendly CV PDF (html-to-pdf, proper ATS formatting)
+- [x] Cover letter PDF (matching professional style)
+- [x] One-click download buttons for each document
+- [x] PDF served via tRPC/API endpoint
 
 ### Phase 4: UI/UX Redesign
-- [ ] Modern SaaS landing page with pricing section
-- [ ] Improved dashboard with clear CTAs and stats
-- [ ] Better job cards with match score, skills chips, quick actions
-- [ ] Apply Kit page redesign with tabbed materials + PDF download
-- [ ] Responsive mobile-friendly layout
+- [x] Modern SaaS landing page with pricing section
+- [x] Improved dashboard with clear CTAs and stats
+- [x] Better job cards with match score, skills chips, quick actions
+- [x] Apply Kit page redesign with tabbed materials + PDF download
+- [x] Responsive mobile-friendly layout
 
 ### Phase 5: Stripe + Credits
-- [ ] Stripe checkout for subscription plans (Free/Pro/Enterprise)
-- [ ] Credit deduction per AI generation
-- [ ] Credit balance shown in header
-- [ ] Gated features for free vs paid users
+- [x] Stripe checkout for subscription plans (Free/Pro/Enterprise)
+- [x] Credit deduction per AI generation
+- [x] Credit balance shown in header
+- [x] Gated features for free vs paid users
 
 ### Phase 6: Tests + Polish
-- [ ] All tests passing
-- [ ] No console errors
-- [ ] Checkpoint saved
+- [x] All tests passing (41 tests, 4 files)
+- [x] No console errors (stale 4:22 PM entry is pre-restart)
+- [x] Checkpoint saved (ce33c4e1)

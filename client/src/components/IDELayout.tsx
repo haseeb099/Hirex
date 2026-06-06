@@ -1,11 +1,13 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 import {
   BrainCircuit,
   Briefcase,
   ChevronRight,
   ClipboardList,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Sparkles,
@@ -59,6 +61,11 @@ export default function IDELayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
+
+  const { data: credits } = trpc.billing.getCredits.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchInterval: 30_000,
+  });
 
   return (
     <div className="h-screen w-screen flex bg-background overflow-hidden">
@@ -164,6 +171,22 @@ export default function IDELayout({ children }: { children: ReactNode }) {
               </div>
             );
           })}
+          {/* Spacer */}
+          <div className="flex-1" />
+          {/* Credit balance */}
+          {credits !== undefined && (
+            <Link href="/pricing">
+              <button
+                title="AI Credits — click to upgrade"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md font-mono text-[11px] transition-colors hover:bg-accent"
+              >
+                <CreditCard className="w-3.5 h-3.5 text-primary" />
+                <span className={credits.balance <= 2 ? "text-destructive font-semibold" : "text-muted-foreground"}>
+                  {credits.balance} credits
+                </span>
+              </button>
+            </Link>
+          )}
         </div>
 
         {/* Page content */}

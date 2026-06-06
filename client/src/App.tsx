@@ -12,6 +12,7 @@ import MemoryPage from "./pages/MemoryPage";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import ApplyPage from "./pages/ApplyPage";
+import PricingPage from "./pages/PricingPage";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/memory" component={() => <IDELayout><MemoryPage /></IDELayout>} />
       <Route path="/dashboard" component={() => <IDELayout><Dashboard /></IDELayout>} />
       <Route path="/apply" component={() => <IDELayout><ApplyPage /></IDELayout>} />
+      <Route path="/pricing" component={PricingPage} />
       <Route component={NotFound} />
     </Switch>
   );
