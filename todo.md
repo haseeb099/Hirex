@@ -110,3 +110,15 @@
 - [x] All tests passing (41 tests, 4 files)
 - [x] No console errors (stale 4:22 PM entry is pre-restart)
 - [x] Checkpoint saved (ce33c4e1)
+
+## v2.1 — ATS CV PDF Improvement
+
+- [ ] LLM CV prompt: structured JSON output (contact, summary, experience[], education[], skills[], keywords[])
+- [ ] Server-side PDF endpoint: /api/cv/download using HTML template
+- [ ] ATS-safe PDF rules: single column, no tables, no graphics, standard fonts, proper heading hierarchy
+- [ ] Section order: Contact → Summary → Experience → Education → Skills → Keywords
+- [ ] Experience bullets: action verb + metric + keyword mirroring from JD
+- [ ] ApplyPage CV tab: live HTML preview before download
+- [ ] One-click "Download ATS CV (PDF)" button wired to server endpoint
+- [ ] Cover letter PDF: matching professional style, one-click download
+- [ ] Vitest tests for CV JSON structure validation

@@ -209,10 +209,51 @@ ${input.jobDescription}`.trim();
 
         // Run all 4 LLM calls in parallel
         const [atsCV, coverLetter, linkedinSummary, interviewPrep] = await Promise.all([
-          // ATS-Optimised CV
+          // ATS-Optimised CV — returns structured JSON
           callLLM(
-            `You are an expert ATS resume writer. Create a highly ATS-optimised CV that mirrors the exact keywords and phrases from the job description. Format it in clean plain text with clear sections: PROFESSIONAL SUMMARY, CORE COMPETENCIES, PROFESSIONAL EXPERIENCE, EDUCATION, SKILLS. Use bullet points with strong action verbs. Include exact keyword matches from the JD. Do NOT use tables, columns, or special characters that ATS systems cannot parse.`,
-            `Create an ATS-optimised CV for this candidate applying to this role.\n\nCANDIDATE PROFILE:\n${profileContext}\n\nJOB DESCRIPTION:\n${jdContext}\n\nGenerate a complete, professional ATS-friendly CV. Mirror keywords from the JD exactly. Make it compelling and specific.`
+            `You are an expert ATS resume writer. You MUST return ONLY valid JSON — no markdown, no prose, no code fences.
+
+Return this exact JSON structure:
+{
+  "name": "Full Name",
+  "email": "email@example.com",
+  "phone": "+1 555 000 0000",
+  "location": "City, Country",
+  "linkedin": "linkedin.com/in/handle",
+  "summary": "2-3 sentence professional summary that mirrors JD keywords exactly.",
+  "experience": [
+    {
+      "title": "Job Title",
+      "company": "Company Name",
+      "location": "City, Country",
+      "startDate": "Jan 2021",
+      "endDate": "Present",
+      "bullets": [
+        "Led [specific achievement] resulting in [quantified metric] using [JD keyword]",
+        "Built [specific thing] that [impact], leveraging [JD keyword]"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "BSc Computer Science",
+      "institution": "University Name",
+      "year": "2018"
+    }
+  ],
+  "skills": ["Skill1", "Skill2", "Skill3"],
+  "keywords": ["keyword1", "keyword2"]
+}
+
+Rules:
+- Mirror EXACT keywords from the job description in summary, bullets, and skills
+- Every bullet must start with a strong action verb (Led, Built, Designed, Reduced, Increased)
+- Every bullet must include a quantified metric where possible (%, $, x faster, N users)
+- Skills list must include all skills mentioned in the JD that the candidate has
+- keywords array = top 10 ATS keywords from the JD that appear in the CV
+- If candidate info is missing, infer reasonable placeholders
+- Return ONLY the JSON object, nothing else`,
+            `Create an ATS-optimised CV JSON for this candidate.\n\nCANDIDATE PROFILE:\n${profileContext}\n\nJOB DESCRIPTION:\n${jdContext}\n\nReturn ONLY the JSON object.`
           ),
           // Cover Letter
           callLLM(
