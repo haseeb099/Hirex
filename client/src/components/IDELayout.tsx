@@ -30,6 +30,12 @@ export default function IDELayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, isAuthenticated, loading, logout } = useAuth();
 
+  // ⚠️ ALL hooks must be called unconditionally before any early returns
+  const { data: credits } = trpc.billing.getCredits.useQuery(undefined, {
+    enabled: isAuthenticated && !loading,
+    refetchInterval: 30_000,
+  });
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
@@ -61,11 +67,6 @@ export default function IDELayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
-
-  const { data: credits } = trpc.billing.getCredits.useQuery(undefined, {
-    enabled: isAuthenticated,
-    refetchInterval: 30_000,
-  });
 
   return (
     <div className="h-screen w-screen flex bg-background overflow-hidden">
