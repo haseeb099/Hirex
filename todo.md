@@ -47,12 +47,12 @@
 - [x] Hard redirect to OAuth login (inline sign-in panel used for SPA; getLoginUrl() redirects to Manus OAuth)
 
 ## Upgrade: Full Job Agent (v1.1)
-- [ ] Schema: add jobs, jobMatches, applications, userProfiles tables
-- [ ] DB migration applied
-- [ ] server/db.ts: saveJob, getUnscoredJobs, saveJobMatch, getRankedJobs, saveUserProfile, getUserProfile helpers
-- [ ] server/services/jobScorer.ts: pure-JS scorer with skills/semantic/title/experience weights
-- [ ] server/routers/jobs.ts: refresh (Remotive API), scoreJobs, getRanked, saveProfile, getProfile
-- [ ] Register jobsRouter in server/routers.ts
-- [ ] client/src/pages/Dashboard.tsx: Profile, Ranked Jobs, Insights tabs
-- [ ] Add /dashboard route in App.tsx
-- [ ] Vitest tests for scorer and router
+- [x] Schema: add jobs, jobMatches, applications, userProfiles tables
+- [x] DB migration applied
+- [x] server/db.ts: saveJob, getUnscoredJobs, saveJobMatch, getRankedJobs, saveUserProfile, getUserProfile helpers
+- [x] server/services/jobScorer.ts: pure-JS scorer with skills/semantic/title/experience weights
+- [x] server/routers/jobs.ts: refresh (Remotive API), scoreJobs, getRanked, saveProfile, getProfile
+- [x] Register jobsRouter in server/routers.ts
+- [x] client/src/pages/Dashboard.tsx: Profile, Ranked Jobs, Insights tabs
+- [x] Add /dashboard route in App.tsx
+- [x] Vitest tests for scorer and router (21 tests passing, 2 test files)
