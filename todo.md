@@ -73,3 +73,40 @@
 - [x] "Generate Apply Kit" button on each job card in Jobs page
 - [x] Match score badge shown on ApplyPage for the analysed job
 - [x] Vitest tests for generateApplyKit procedure (34 tests passing, 3 files)
+
+## v2.0 — SaaS Rebuild
+
+### Phase 1: DB + Schema Fixes
+- [ ] Fix all remaining query errors (applications, jobs search)
+- [ ] Add user_credits and subscriptions tables
+- [ ] Add Stripe integration (checkout, webhooks)
+
+### Phase 2: Agentic Job Fetcher
+- [ ] Fix Remotive API job fetching (real jobs, not demo)
+- [ ] URL/JD paste import: scrape job from URL or paste raw JD
+- [ ] Remove broken legacyJobs demo system — replace with real Remotive + paste flow
+- [ ] Job search works reliably without errors
+
+### Phase 3: ATS PDF Generator
+- [ ] ATS-friendly CV PDF (html-to-pdf, proper ATS formatting)
+- [ ] Cover letter PDF (matching professional style)
+- [ ] One-click download buttons for each document
+- [ ] PDF served via tRPC/API endpoint
+
+### Phase 4: UI/UX Redesign
+- [ ] Modern SaaS landing page with pricing section
+- [ ] Improved dashboard with clear CTAs and stats
+- [ ] Better job cards with match score, skills chips, quick actions
+- [ ] Apply Kit page redesign with tabbed materials + PDF download
+- [ ] Responsive mobile-friendly layout
+
+### Phase 5: Stripe + Credits
+- [ ] Stripe checkout for subscription plans (Free/Pro/Enterprise)
+- [ ] Credit deduction per AI generation
+- [ ] Credit balance shown in header
+- [ ] Gated features for free vs paid users
+
+### Phase 6: Tests + Polish
+- [ ] All tests passing
+- [ ] No console errors
+- [ ] Checkpoint saved

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { downloadCVAsPDF, downloadCoverLetterAsPDF } from "@/lib/pdfGenerator";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type KitTab = "cv" | "cover" | "linkedin" | "interview";
@@ -168,6 +169,33 @@ function KitResultPanel({ kit }: { kit: ApplyKitItem }) {
                 <Download className="w-3 h-3" />
                 .txt
               </button>
+              {(activeTab === "cv" || activeTab === "cover") && (
+                <button
+                  onClick={async () => {
+                    try {
+                      if (activeTab === "cv") {
+                        await downloadCVAsPDF(content.cv, kit.jobTitle ?? "Candidate");
+                        toast.success("ATS CV downloaded as PDF");
+                      } else {
+                        await downloadCoverLetterAsPDF(
+                          content.cover,
+                          kit.jobTitle ?? "Candidate",
+                          kit.jobTitle ?? "Role",
+                          kit.company ?? "Company"
+                        );
+                        toast.success("Cover Letter downloaded as PDF");
+                      }
+                    } catch (e) {
+                      toast.error("PDF generation failed — try .txt instead");
+                    }
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 transition-all font-semibold"
+                  title="Download ATS-friendly PDF"
+                >
+                  <Download className="w-3 h-3" />
+                  PDF
+                </button>
+              )}
             </div>
             <pre className="p-4 pt-10 font-mono text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed overflow-auto max-h-[500px] bg-[oklch(0.10_0.004_264)]">
               {content[activeTab] || (
@@ -190,7 +218,7 @@ export default function ApplyPage() {
   const [company, setCompany] = useState(params.get("company") ?? "");
   const [showForm, setShowForm] = useState(true);
 
-  const { data: kits, isLoading: kitsLoading, refetch } = trpc.applyKit.list.useQuery();
+  const { data: kits, isLoading: kitsLoading, refetch } = trpc.applyKit.list.useQuery({ limit: 20 });
 
   const generate = trpc.applyKit.generate.useMutation({
     onSuccess: () => {

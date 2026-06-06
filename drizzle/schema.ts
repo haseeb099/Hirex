@@ -143,6 +143,35 @@ export const applyKits = mysqlTable("apply_kits", {
 export type ApplyKit = typeof applyKits.$inferSelect;
 export type InsertApplyKit = typeof applyKits.$inferInsert;
 
+// ── Subscriptions ────────────────────────────────────────────────────────────
+export const subscriptions = mysqlTable("subscriptions", {
+  id:                   int("id").autoincrement().primaryKey(),
+  userId:               int("userId").notNull().unique(),
+  stripeCustomerId:     varchar("stripeCustomerId", { length: 255 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  plan:                 mysqlEnum("plan", ["free", "pro", "enterprise"]).default("free").notNull(),
+  status:               mysqlEnum("status", ["active", "canceled", "past_due", "trialing"]).default("active").notNull(),
+  currentPeriodEnd:     timestamp("currentPeriodEnd"),
+  createdAt:            timestamp("createdAt").defaultNow().notNull(),
+  updatedAt:            timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+// ── User Credits ──────────────────────────────────────────────────────────────
+export const userCredits = mysqlTable("user_credits", {
+  id:           int("id").autoincrement().primaryKey(),
+  userId:       int("userId").notNull().unique(),
+  balance:      int("balance").default(5).notNull(),
+  totalEarned:  int("totalEarned").default(5).notNull(),
+  totalSpent:   int("totalSpent").default(0).notNull(),
+  updatedAt:    timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserCredit = typeof userCredits.$inferSelect;
+export type InsertUserCredit = typeof userCredits.$inferInsert;
+
 // ── Memory Entries ────────────────────────────────────────────────────────────
 export const memoryEntries = mysqlTable("memory_entries", {
   id:         int("id").autoincrement().primaryKey(),

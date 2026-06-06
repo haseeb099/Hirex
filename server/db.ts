@@ -15,6 +15,8 @@ import {
   jobMatches,
   jobs,
   memoryEntries,
+  subscriptions,
+  userCredits,
   userProfiles,
   users,
 } from "../drizzle/schema";
@@ -273,4 +275,68 @@ export async function getApplyKitById(id: number, userId: number) {
   if (!db) return null;
   const rows = await db.select().from(applyKits).where(and(eq(applyKits.id, id), eq(applyKits.userId, userId))).limit(1);
   return rows[0] ?? null;
+}
+
+// ── Credits ──────────────────────────────────────────────────────────────────────────────
+export async function getUserCredits(userId: number) {
+  const db = await getDb();
+  if (!db) return { balance: 5, totalEarned: 5, totalSpent: 0 };
+  const rows = await db.select().from(userCredits).where(eq(userCredits.userId, userId)).limit(1);
+  if (rows[0]) return rows[0];
+  // Auto-create with 5 free credits on first access
+  await db.insert(userCredits).values({ userId, balance: 5, totalEarned: 5, totalSpent: 0 });
+  return { balance: 5, totalEarned: 5, totalSpent: 0 };
+}
+
+export async function deductCredit(userId: number, amount = 1): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const credits = await getUserCredits(userId);
+  if ((credits.balance ?? 0) < amount) return false;
+  await db.update(userCredits).set({
+    balance: sql`balance - ${amount}`,
+    totalSpent: sql`totalSpent + ${amount}`,
+  }).where(eq(userCredits.userId, userId));
+  return true;
+}
+
+export async function addCredits(userId: number, amount: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(userCredits).values({ userId, balance: amount, totalEarned: amount, totalSpent: 0 })
+    .onDuplicateKeyUpdate({
+      set: {
+        balance: sql`balance + ${amount}`,
+        totalEarned: sql`totalEarned + ${amount}`,
+      },
+    });
+}
+
+// ── Subscriptions ──────────────────────────────────────────────────────────────────
+export async function getUserSubscription(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertSubscription(data: {
+  userId: number;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  plan: 'free' | 'pro' | 'enterprise';
+  status: 'active' | 'canceled' | 'past_due' | 'trialing';
+  currentPeriodEnd?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(subscriptions).values(data).onDuplicateKeyUpdate({
+    set: {
+      stripeCustomerId: data.stripeCustomerId,
+      stripeSubscriptionId: data.stripeSubscriptionId,
+      plan: data.plan,
+      status: data.status,
+      currentPeriodEnd: data.currentPeriodEnd,
+    },
+  });
 }

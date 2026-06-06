@@ -1,3 +1,9 @@
+/**
+ * server/routers.ts
+ * Main tRPC router — all procedures for the Job Agent SaaS v2.0
+ */
+
+import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
@@ -5,119 +11,64 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { jobsRouter } from "./routers/jobs";
 import {
+  addCredits,
   addMemoryEntry,
-  countMemoryEntries,
   createApplication,
-  getApplicationsByUser,
+  deductCredit,
   getApplyKitById,
   getApplyKitsByUser,
-  getJobsByUser,
+  getApplicationsByUser,
   getMemoryEntries,
   getProfile,
-  getRecentMemoryContext,
+  getRankedJobs,
+  getUserCredits,
+  getUserProfile,
+  getUserSubscription,
   saveApplyKit,
   saveJob,
   updateApplicationStatus,
   upsertProfile,
+  upsertSubscription,
 } from "./db";
-import { jobsRouter } from "./routers/jobs";
 
-// ── Application status (lowercase to match updated schema) ────────────────────
-const APPLICATION_STATUSES = ["draft", "applied", "interviewing", "rejected", "offer"] as const;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
+  apiVersion: "2026-05-27.dahlia",
+});
 
-// ── LLM job scoring helper ────────────────────────────────────────────────────
-async function scoreJobWithLLM(
-  jobTitle: string,
-  jobDescription: string,
-  jobRequirements: string,
-  profileSummary: string,
-  memoryContext: string
-): Promise<{ score: number; tier: "high" | "medium" | "low"; reasoning: string; coverLetter: string }> {
-  const systemPrompt = `You are an expert career coach and job-matching AI.
-Given a candidate profile and a job description, return a JSON object with exactly these fields:
-- "score": number 0.0–1.0 (how well the job matches the candidate)
-- "tier": "high" (score>=0.7), "medium" (score>=0.45), or "low" (score<0.45)
-- "reasoning": 2-3 sentence explanation of the match
-- "coverLetter": a concise, personalised 3-paragraph cover letter for this specific job
-Respond ONLY with valid JSON.`;
+// ── Stripe Products ───────────────────────────────────────────────────────────
+const PLANS = {
+  pro: {
+    name: "Pro",
+    priceMonthly: 1900, // $19/month in cents
+    credits: 100,
+    features: ["100 AI credits/month", "Unlimited job imports", "PDF downloads", "Priority support"],
+  },
+  enterprise: {
+    name: "Enterprise",
+    priceMonthly: 4900, // $49/month in cents
+    credits: 500,
+    features: ["500 AI credits/month", "Team seats", "API access", "Dedicated support"],
+  },
+};
 
-  const userContent = `CANDIDATE PROFILE:
-${profileSummary}
-
-JOB TITLE: ${jobTitle}
-JOB DESCRIPTION:
-${jobDescription.slice(0, 2000)}
-
-REQUIREMENTS:
-${jobRequirements.slice(0, 800)}
-
-${memoryContext ? `RELEVANT PAST EXPERIENCE (from memory):\n${memoryContext}` : ""}`;
-
-  try {
-    const response = await invokeLLM({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
-    const content = (response.choices[0]?.message?.content as string) ?? "{}";
-    const parsed = JSON.parse(content);
-    const score = Math.min(1, Math.max(0, Number(parsed.score) || 0));
-    const tier: "high" | "medium" | "low" = score >= 0.7 ? "high" : score >= 0.45 ? "medium" : "low";
-    return {
-      score,
-      tier,
-      reasoning: parsed.reasoning ?? "",
-      coverLetter: parsed.coverLetter ?? "",
-    };
-  } catch {
-    return { score: 0.5, tier: "medium", reasoning: "Scoring unavailable.", coverLetter: "" };
-  }
-}
-
-// ── Sample jobs for demo (legacy search flow) ─────────────────────────────────
-function generateSampleJobs(query: string, location: string) {
-  const roles = [
-    { title: `Senior ${query}`, company: "Stripe", jobType: "Full-time", salaryMin: 160000, salaryMax: 220000 },
-    { title: `${query} Engineer`, company: "Vercel", jobType: "Full-time", salaryMin: 140000, salaryMax: 190000 },
-    { title: `Staff ${query}`, company: "Linear", jobType: "Full-time", salaryMin: 180000, salaryMax: 250000 },
-    { title: `${query} Lead`, company: "Notion", jobType: "Full-time", salaryMin: 155000, salaryMax: 210000 },
-    { title: `Principal ${query}`, company: "Figma", jobType: "Full-time", salaryMin: 200000, salaryMax: 280000 },
-    { title: `${query} Architect`, company: "Anthropic", jobType: "Full-time", salaryMin: 220000, salaryMax: 320000 },
-  ];
-
-  const descriptions = [
-    "We are looking for a talented engineer to join our growing team. You will work on cutting-edge distributed systems, collaborate with world-class engineers, and ship features used by millions of developers worldwide. Strong TypeScript, React, and Node.js skills required.",
-    "Join our platform team to build the infrastructure that powers the next generation of web development. You'll work on performance-critical systems, design APIs, and contribute to open-source projects. Experience with Rust or Go is a plus.",
-    "We need a passionate engineer to help us build the future of work. You'll own entire product areas, mentor junior engineers, and work directly with founders. Strong background in system design and distributed databases required.",
-    "Shape the product that millions of teams use every day. You'll work across the full stack, from database query optimization to pixel-perfect UI. We value craftsmanship, attention to detail, and deep technical expertise.",
-    "Help us build design tools used by the world's best designers. You'll work on complex rendering pipelines, real-time collaboration systems, and developer APIs. Experience with WebGL or Canvas is highly valued.",
-    "Work on the most important AI safety research happening today. You'll build infrastructure for training and evaluating large language models, work with cutting-edge ML systems, and contribute to research that matters.",
-  ];
-
-  return roles.map((r, i) => ({
-    externalId: `demo-${r.company.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`,
-    title: r.title,
-    company: r.company,
-    location: location || "Remote",
-    jobType: r.jobType,
-    description: descriptions[i % descriptions.length]!,
-    requirements: "5+ years of software engineering experience, strong TypeScript/JavaScript skills, experience with distributed systems, excellent communication skills.",
-    salaryMin: r.salaryMin,
-    salaryMax: r.salaryMax,
-    salaryCurrency: "USD",
-    url: `https://example.com/jobs/${r.company.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`.slice(0, 768),
-    source: "demo",
-    isActive: true as const,
-  }));
+// ── LLM helpers ───────────────────────────────────────────────────────────────
+async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+  const res = await invokeLLM({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+  });
+  return (res.choices?.[0]?.message?.content as string) ?? "";
 }
 
 // ── App Router ────────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
 
+  // ── Auth ────────────────────────────────────────────────────────────────────
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -127,211 +78,170 @@ export const appRouter = router({
     }),
   }),
 
-  // ── v1.1 Jobs router (Remotive + scorer) ──────────────────────────────────
+  // ── v1.1 Jobs router (Remotive + scorer) ────────────────────────────────────
   jobs: jobsRouter,
 
-  // ── Legacy profile (v1.0 candidate_profiles table) ────────────────────────
+  // ── Profile (v1.0 candidate profile) ────────────────────────────────────────
   profile: router({
-    get: protectedProcedure.query(async ({ ctx }) => {
-      return getProfile(ctx.user.id);
-    }),
-
+    get: protectedProcedure.query(async ({ ctx }) => getProfile(ctx.user.id)),
     upsert: protectedProcedure
       .input(
         z.object({
-          fullName: z.string().optional(),
-          headline: z.string().optional(),
+          fullName: z.string().max(255).optional(),
+          headline: z.string().max(255).optional(),
           resumeText: z.string().optional(),
           skills: z.array(z.string()).optional(),
-          experienceYears: z.number().int().min(0).max(50).optional(),
+          experienceYears: z.number().int().min(0).max(60).optional(),
           preferredRoles: z.array(z.string()).optional(),
           preferredLocations: z.array(z.string()).optional(),
           targetSalary: z.number().int().optional(),
         })
       )
-      .mutation(async ({ ctx, input }) => {
-        return upsertProfile({ userId: ctx.user.id, ...input });
-      }),
+      .mutation(async ({ ctx, input }) =>
+        upsertProfile({ userId: ctx.user.id, ...input })
+      ),
   }),
 
-  // ── Legacy job search (LLM-scored demo jobs) ──────────────────────────────
-  legacyJobs: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      return getJobsByUser(ctx.user.id);
-    }),
-
-    search: protectedProcedure
-      .input(
-        z.object({
-          query: z.string().min(1).max(200),
-          location: z.string().max(200).optional().default("remote"),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const profile = await getProfile(ctx.user.id);
-        const memoryContext = await getRecentMemoryContext(ctx.user.id, 5);
-
-        const profileSummary = profile
-          ? `Name: ${profile.fullName ?? "Unknown"}
-Headline: ${profile.headline ?? ""}
-Skills: ${(profile.skills as string[] | null)?.join(", ") ?? "Not specified"}
-Experience: ${profile.experienceYears ?? 0} years
-Preferred roles: ${(profile.preferredRoles as string[] | null)?.join(", ") ?? "Any"}
-Preferred locations: ${(profile.preferredLocations as string[] | null)?.join(", ") ?? "Any"}
-Target salary: ${profile.targetSalary ? `$${profile.targetSalary.toLocaleString()}` : "Flexible"}
-Resume summary: ${(profile.resumeText ?? "").slice(0, 1000)}`
-          : `Searching for: ${input.query}`;
-
-        const rawJobs = generateSampleJobs(input.query, input.location);
-
-        const scored = await Promise.all(
-          rawJobs.map(async (raw) => {
-            const scoring = await scoreJobWithLLM(
-              raw.title,
-              raw.description,
-              raw.requirements,
-              profileSummary,
-              memoryContext
-            );
-            return saveJob({
-              ...raw,
-              // Store score info in description suffix for legacy display
-              description: `${raw.description}\n\n[Score: ${(scoring.score * 100).toFixed(0)}% | ${scoring.tier}]\n${scoring.reasoning}`,
-            });
-          })
-        );
-
-        return scored
-          .filter(Boolean)
-          .sort((a, b) => (b?.id ?? 0) - (a?.id ?? 0));
-      }),
-  }),
-
-  // ── Applications ──────────────────────────────────────────────────────────
+  // ── Applications ─────────────────────────────────────────────────────────────
   applications: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      const apps = await getApplicationsByUser(ctx.user.id);
-      const jobsList = await getJobsByUser(ctx.user.id);
-      const jobMap = new Map(jobsList.map((j) => [j.id, j]));
-      return apps.map((app) => ({ ...app, job: jobMap.get(app.jobId) ?? null }));
+      return getApplicationsByUser(ctx.user.id);
     }),
 
     create: protectedProcedure
-      .input(z.object({ jobId: z.number().int() }))
-      .mutation(async ({ ctx, input }) => {
-        return createApplication({ userId: ctx.user.id, jobId: input.jobId, status: "draft" });
-      }),
+      .input(
+        z.object({
+          jobId: z.number().int(),
+          status: z.enum(["draft", "applied", "interviewing", "rejected", "offer"]).optional().default("draft"),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) =>
+        createApplication({ userId: ctx.user.id, ...input })
+      ),
 
     updateStatus: protectedProcedure
       .input(
         z.object({
           id: z.number().int(),
-          status: z.enum(APPLICATION_STATUSES),
+          status: z.enum(["draft", "applied", "interviewing", "rejected", "offer"]),
           notes: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const updated = await updateApplicationStatus(input.id, ctx.user.id, input.status, input.notes);
-        if (!updated) throw new TRPCError({ code: "NOT_FOUND" });
-
-        // Store outcome in memory on significant status transitions
-        if (input.status === "offer" || input.status === "rejected" || input.status === "interviewing") {
-          const jobsList = await getJobsByUser(ctx.user.id);
-          const job = jobsList.find((j) => j.id === updated.jobId);
-          if (job) {
-            await addMemoryEntry({
-              userId: ctx.user.id,
-              content: `Application for "${job.title}" at ${job.company} (${job.location}) reached status: ${input.status}. ${input.notes ? `Notes: ${input.notes}` : ""}`,
-              memoryType: "application_outcome",
-              metadata: { jobId: job.id, status: input.status },
-            });
-          }
+        const app = await updateApplicationStatus(input.id, ctx.user.id, input.status, input.notes);
+        // Auto-store memory on key transitions
+        if (["interviewing", "offer", "rejected"].includes(input.status)) {
+          await addMemoryEntry({
+            userId: ctx.user.id,
+            content: `Application #${input.id} moved to ${input.status}. Notes: ${input.notes ?? "none"}`,
+            memoryType: "application_outcome",
+            metadata: { applicationId: input.id, status: input.status },
+          });
         }
-        return updated;
+        return app;
       }),
   }),
 
-  // ── Apply Kit (AI-generated application materials) ──────────────────────
-  applyKit: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      return getApplyKitsByUser(ctx.user.id);
+  // ── Memory ────────────────────────────────────────────────────────────────────
+  memory: router({
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).optional().default(20) }))
+      .query(async ({ ctx, input }) => getMemoryEntries(ctx.user.id, input.limit)),
+
+    count: protectedProcedure.query(async ({ ctx }) => {
+      const entries = await getMemoryEntries(ctx.user.id, 1000);
+      return entries.length;
     }),
 
-    get: protectedProcedure
-      .input(z.object({ id: z.number().int() }))
-      .query(async ({ ctx, input }) => {
-        return getApplyKitById(input.id, ctx.user.id);
+    add: protectedProcedure
+      .input(z.object({ content: z.string().min(1).max(2000), memoryType: z.string().optional().default("manual") }))
+      .mutation(async ({ ctx, input }) => {
+        await addMemoryEntry({ userId: ctx.user.id, content: input.content, memoryType: input.memoryType });
+        return { success: true };
       }),
+  }),
 
+  // ── Apply Kit ─────────────────────────────────────────────────────────────────
+  applyKit: router({
     generate: protectedProcedure
       .input(
         z.object({
+          jobTitle: z.string().min(1).max(255),
+          company: z.string().min(1).max(255),
           jobDescription: z.string().min(10).max(20000),
-          jobTitle: z.string().max(255).optional().default(""),
-          company: z.string().max(255).optional().default(""),
           jobId: z.number().int().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        // Check credits
+        const hasCredit = await deductCredit(ctx.user.id, 1);
+        if (!hasCredit) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Insufficient credits. Please upgrade your plan to continue.",
+          });
+        }
+
+        // Get profile for personalisation
         const profile = await getProfile(ctx.user.id);
-        const memoryContext = await getRecentMemoryContext(ctx.user.id, 5);
+        const userProfile = await getUserProfile(ctx.user.id);
 
-        const profileSummary = profile
-          ? `Full Name: ${profile.fullName ?? "Candidate"}
-Headline: ${profile.headline ?? ""}
-Skills: ${(profile.skills as string[] | null)?.join(", ") ?? "Not specified"}
-Experience: ${profile.experienceYears ?? 0} years
-Preferred Roles: ${(profile.preferredRoles as string[] | null)?.join(", ") ?? "Any"}
-Target Salary: ${profile.targetSalary ? `$${profile.targetSalary.toLocaleString()}` : "Flexible"}
-Resume:\n${(profile.resumeText ?? "").slice(0, 3000)}`
-          : "No profile set up yet. Please complete your profile first.";
+        const resumeText = profile?.resumeText ?? userProfile?.resumeText ?? "";
+        const skills = (profile?.skills as string[] | null) ?? (userProfile?.skills as string[] | null) ?? [];
+        const name = profile?.fullName ?? ctx.user.name ?? "Candidate";
+        const headline = profile?.headline ?? userProfile?.headline ?? "";
+        const experienceYears = profile?.experienceYears ?? userProfile?.experienceYears ?? 0;
 
-        const jd = input.jobDescription.slice(0, 6000);
-        const jobTitle = input.jobTitle || "the role";
-        const company = input.company || "the company";
+        const profileContext = `
+Candidate Name: ${name}
+Headline: ${headline}
+Skills: ${skills.join(", ") || "Not specified"}
+Experience: ${experienceYears} years
+Resume/Background:
+${resumeText || "Not provided"}`.trim();
 
-        const [atsCVRes, coverLetterRes, linkedinRes, interviewRes] = await Promise.all([
-          invokeLLM({
-            messages: [
-              { role: "system", content: "You are an expert ATS resume writer. Rewrite the candidate's resume to maximise keyword match with the job description. Mirror exact keywords from the JD; use strong action verbs; quantify achievements; keep to 1 page equivalent; use section headers: SUMMARY, EXPERIENCE, SKILLS, EDUCATION. Do NOT fabricate experience. Output plain text only." },
-              { role: "user", content: `JOB TITLE: ${jobTitle}\nCOMPANY: ${company}\n\nJOB DESCRIPTION:\n${jd}\n\nCANDIDATE PROFILE:\n${profileSummary}${memoryContext ? `\n\nPAST APPLICATION OUTCOMES:\n${memoryContext}` : ""}` },
-            ],
-          }),
-          invokeLLM({
-            messages: [
-              { role: "system", content: "You are an expert career coach writing ATS-friendly cover letters. Write a 3-paragraph cover letter: (1) Opening - why this company and role excites the candidate. (2) Body - 2-3 concrete achievements that address the JD requirements. (3) Closing - confident call to action. Use the candidate's name. Mirror JD keywords. Under 350 words. Output plain text only." },
-              { role: "user", content: `JOB TITLE: ${jobTitle}\nCOMPANY: ${company}\n\nJOB DESCRIPTION:\n${jd}\n\nCANDIDATE PROFILE:\n${profileSummary}` },
-            ],
-          }),
-          invokeLLM({
-            messages: [
-              { role: "system", content: "You are a LinkedIn profile expert. Write a 3-5 sentence LinkedIn About section optimised for the target role. Open with a strong hook; highlight 2-3 key skills from the JD; mention a notable achievement; end with what the candidate is seeking. Conversational, first-person, under 200 words. Output plain text only." },
-              { role: "user", content: `TARGET ROLE: ${jobTitle} at ${company}\n\nJOB DESCRIPTION:\n${jd.slice(0, 2000)}\n\nCANDIDATE PROFILE:\n${profileSummary}` },
-            ],
-          }),
-          invokeLLM({
-            messages: [
-              { role: "system", content: "You are an expert interview coach. Generate exactly 5 likely interview questions with suggested answers. Format:\nQ1: [question]\nA1: [2-3 sentence answer using STAR method, referencing the candidate's actual experience]\n\nQ2: ...\n\nMake questions specific to the JD. Output plain text only." },
-              { role: "user", content: `JOB TITLE: ${jobTitle}\nCOMPANY: ${company}\n\nJOB DESCRIPTION:\n${jd}\n\nCANDIDATE PROFILE:\n${profileSummary}` },
-            ],
-          }),
+        const jdContext = `
+Job Title: ${input.jobTitle}
+Company: ${input.company}
+Job Description:
+${input.jobDescription}`.trim();
+
+        // Run all 4 LLM calls in parallel
+        const [atsCV, coverLetter, linkedinSummary, interviewPrep] = await Promise.all([
+          // ATS-Optimised CV
+          callLLM(
+            `You are an expert ATS resume writer. Create a highly ATS-optimised CV that mirrors the exact keywords and phrases from the job description. Format it in clean plain text with clear sections: PROFESSIONAL SUMMARY, CORE COMPETENCIES, PROFESSIONAL EXPERIENCE, EDUCATION, SKILLS. Use bullet points with strong action verbs. Include exact keyword matches from the JD. Do NOT use tables, columns, or special characters that ATS systems cannot parse.`,
+            `Create an ATS-optimised CV for this candidate applying to this role.\n\nCANDIDATE PROFILE:\n${profileContext}\n\nJOB DESCRIPTION:\n${jdContext}\n\nGenerate a complete, professional ATS-friendly CV. Mirror keywords from the JD exactly. Make it compelling and specific.`
+          ),
+          // Cover Letter
+          callLLM(
+            `You are an expert cover letter writer. Write a compelling, personalised 3-paragraph cover letter. Paragraph 1: Hook + role excitement. Paragraph 2: Specific achievements matching JD requirements. Paragraph 3: Cultural fit + CTA. Use the candidate's real background. Be specific, not generic. Keep it under 350 words.`,
+            `Write a tailored cover letter.\n\nCANDIDATE PROFILE:\n${profileContext}\n\nJOB DESCRIPTION:\n${jdContext}`
+          ),
+          // LinkedIn Summary
+          callLLM(
+            `You are a LinkedIn profile expert. Write a compelling LinkedIn "About" section (3-5 sentences, 200-300 words) that positions the candidate perfectly for this type of role. Use first person. Include key skills, achievements, and a call to action.`,
+            `Write a LinkedIn About section for this candidate targeting this role.\n\nCANDIDATE PROFILE:\n${profileContext}\n\nTARGET ROLE:\n${jdContext}`
+          ),
+          // Interview Prep
+          callLLM(
+            `You are an expert interview coach. Generate 5 likely interview questions for this specific role with detailed STAR-method answer frameworks tailored to the candidate's background. Format as: Q1: [Question]\nA: [STAR answer framework with specific examples from their background]\n\nRepeat for Q2-Q5.`,
+            `Generate 5 interview Q&As for this candidate.\n\nCANDIDATE PROFILE:\n${profileContext}\n\nJOB DESCRIPTION:\n${jdContext}`
+          ),
         ]);
 
-        const atsCV = (atsCVRes.choices[0]?.message?.content as string) ?? "";
-        const coverLetter = (coverLetterRes.choices[0]?.message?.content as string) ?? "";
-        const linkedinSummary = (linkedinRes.choices[0]?.message?.content as string) ?? "";
-        const interviewPrep = (interviewRes.choices[0]?.message?.content as string) ?? "";
+        // Calculate keyword match score
+        const jdWords = new Set(input.jobDescription.toLowerCase().match(/\b\w{4,}\b/g) ?? []);
+        const cvWords = new Set(atsCV.toLowerCase().match(/\b\w{4,}\b/g) ?? []);
+        const overlap = Array.from(jdWords).filter((w) => cvWords.has(w)).length;
+        const matchScore = Math.min(100, Math.round((overlap / Math.max(jdWords.size, 1)) * 200));
 
-        const jdWords = new Set(jd.toLowerCase().split(/\W+/).filter((w) => w.length > 3));
-        const resumeWords = profileSummary.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
-        const matchCount = resumeWords.filter((w) => jdWords.has(w)).length;
-        const matchScore = Math.min(100, Math.round((matchCount / Math.max(jdWords.size, 1)) * 200));
-
-        return saveApplyKit({
+        const kit = await saveApplyKit({
           userId: ctx.user.id,
           jobId: input.jobId,
-          jobTitle,
-          company,
+          jobTitle: input.jobTitle,
+          company: input.company,
           jobDescription: input.jobDescription,
           atsCV,
           coverLetter,
@@ -339,30 +249,180 @@ Resume:\n${(profile.resumeText ?? "").slice(0, 3000)}`
           interviewPrep,
           matchScore,
         });
-      }),
-  }),
 
-  // ── Memory ────────────────────────────────────────────────────────────────
-  memory: router({
-    count: protectedProcedure.query(async ({ ctx }) => {
-      return { count: await countMemoryEntries(ctx.user.id) };
-    }),
+        return kit;
+      }),
 
     list: protectedProcedure
       .input(z.object({ limit: z.number().int().min(1).max(50).optional().default(20) }))
-      .query(async ({ ctx, input }) => {
-        return getMemoryEntries(ctx.user.id, input.limit);
+      .query(async ({ ctx, input }) => getApplyKitsByUser(ctx.user.id, input.limit)),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .query(async ({ ctx, input }) => getApplyKitById(input.id, ctx.user.id)),
+  }),
+
+  // ── Credits & Subscription ────────────────────────────────────────────────────
+  billing: router({
+    getCredits: protectedProcedure.query(async ({ ctx }) => getUserCredits(ctx.user.id)),
+
+    getSubscription: protectedProcedure.query(async ({ ctx }) => getUserSubscription(ctx.user.id)),
+
+    createCheckout: protectedProcedure
+      .input(
+        z.object({
+          plan: z.enum(["pro", "enterprise"]),
+          origin: z.string().url(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const planInfo = PLANS[input.plan];
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          customer_email: ctx.user.email ?? undefined,
+          allow_promotion_codes: true,
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: `Job Agent ${planInfo.name}`,
+                  description: planInfo.features.join(" • "),
+                },
+                unit_amount: planInfo.priceMonthly,
+                recurring: { interval: "month" },
+              },
+              quantity: 1,
+            },
+          ],
+          client_reference_id: ctx.user.id.toString(),
+          metadata: {
+            user_id: ctx.user.id.toString(),
+            plan: input.plan,
+            customer_email: ctx.user.email ?? "",
+            customer_name: ctx.user.name ?? "",
+          },
+          success_url: `${input.origin}/dashboard?payment=success`,
+          cancel_url: `${input.origin}/pricing?payment=canceled`,
+        });
+        return { url: session.url };
+      }),
+  }),
+
+  // ── Job Import (URL scrape + JD paste) ───────────────────────────────────────
+  jobImport: router({
+    fromUrl: protectedProcedure
+      .input(z.object({ url: z.string().url().max(768) }))
+      .mutation(async ({ ctx, input }) => {
+        // Check credits
+        const hasCredit = await deductCredit(ctx.user.id, 1);
+        if (!hasCredit) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient credits." });
+        }
+
+        // Fetch the page
+        let rawHtml = "";
+        try {
+          const res = await fetch(input.url, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; JobAgentBot/1.0)" },
+            signal: AbortSignal.timeout(10_000),
+          });
+          rawHtml = await res.text();
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Could not fetch the URL. Please paste the job description manually." });
+        }
+
+        // Strip HTML tags
+        const text = rawHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
+
+        // Use LLM to extract structured job data
+        const extracted = await callLLM(
+          `You are a job description parser. Extract structured data from the provided text and return ONLY valid JSON with these fields: title (string), company (string), location (string), jobType (string: full_time|part_time|contract|remote), description (string, max 3000 chars), requirements (string, max 1000 chars), salaryMin (number or null), salaryMax (number or null). If a field cannot be determined, use null.`,
+          `Extract job data from this text:\n\n${text}`
+        );
+
+        let jobData: {
+          title: string; company: string; location: string; jobType: string;
+          description: string; requirements: string; salaryMin: number | null; salaryMax: number | null;
+        };
+
+        try {
+          const cleaned = extracted.replace(/```json\n?|\n?```/g, "").trim();
+          jobData = JSON.parse(cleaned);
+        } catch {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not parse job data from URL. Please paste the description manually." });
+        }
+
+        const saved = await saveJob({
+          externalId: `url-${Buffer.from(input.url).toString("base64").slice(0, 50)}`,
+          title: jobData.title ?? "Unknown Role",
+          company: jobData.company ?? "Unknown Company",
+          location: jobData.location ?? "Remote",
+          jobType: jobData.jobType ?? "full_time",
+          description: jobData.description ?? "",
+          requirements: jobData.requirements ?? null,
+          url: input.url.slice(0, 768),
+          source: "url_import",
+          salaryMin: jobData.salaryMin ?? null,
+          salaryMax: jobData.salaryMax ?? null,
+          isActive: true,
+        });
+
+        return saved;
       }),
 
-    add: protectedProcedure
-      .input(z.object({ content: z.string().min(1), memoryType: z.string().optional() }))
+    fromText: protectedProcedure
+      .input(
+        z.object({
+          jobDescription: z.string().min(50).max(20000),
+          jobTitle: z.string().max(255).optional(),
+          company: z.string().max(255).optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        await addMemoryEntry({
-          userId: ctx.user.id,
-          content: input.content,
-          memoryType: input.memoryType ?? "manual",
+        // Extract structured data from pasted JD
+        const extracted = await callLLM(
+          `You are a job description parser. Extract structured data and return ONLY valid JSON: title (string), company (string), location (string), jobType (string), description (string, max 3000 chars), requirements (string, max 1000 chars), salaryMin (number or null), salaryMax (number or null).`,
+          `Extract job data:\nTitle hint: ${input.jobTitle ?? "unknown"}\nCompany hint: ${input.company ?? "unknown"}\n\nJD:\n${input.jobDescription}`
+        );
+
+        let jobData: {
+          title: string; company: string; location: string; jobType: string;
+          description: string; requirements: string; salaryMin: number | null; salaryMax: number | null;
+        };
+
+        try {
+          const cleaned = extracted.replace(/```json\n?|\n?```/g, "").trim();
+          jobData = JSON.parse(cleaned);
+        } catch {
+          jobData = {
+            title: input.jobTitle ?? "Unknown Role",
+            company: input.company ?? "Unknown Company",
+            location: "Remote",
+            jobType: "full_time",
+            description: input.jobDescription.slice(0, 3000),
+            requirements: "",
+            salaryMin: null,
+            salaryMax: null,
+          };
+        }
+
+        const saved = await saveJob({
+          externalId: `paste-${ctx.user.id}-${Date.now()}`,
+          title: input.jobTitle ?? jobData.title ?? "Unknown Role",
+          company: input.company ?? jobData.company ?? "Unknown Company",
+          location: jobData.location ?? "Remote",
+          jobType: jobData.jobType ?? "full_time",
+          description: jobData.description ?? input.jobDescription.slice(0, 3000),
+          requirements: jobData.requirements ?? null,
+          url: `https://jobagent.app/imported/${ctx.user.id}-${Date.now()}`.slice(0, 768),
+          source: "paste_import",
+          salaryMin: jobData.salaryMin ?? null,
+          salaryMax: jobData.salaryMax ?? null,
+          isActive: true,
         });
-        return { success: true };
+
+        return saved;
       }),
   }),
 });

@@ -77,6 +77,14 @@ vi.mock("./db", async (importOriginal) => {
     updateApplicationStatus: vi.fn().mockResolvedValue(undefined),
     upsertProfile: vi.fn().mockResolvedValue(undefined),
     saveJob: vi.fn().mockResolvedValue({ id: 1 }),
+    // Credit system — always grant credits in tests
+    deductCredit: vi.fn().mockResolvedValue(true),
+    getUserCredits: vi.fn().mockResolvedValue({ balance: 100, plan: "pro" }),
+    getUserProfile: vi.fn().mockResolvedValue(null),
+    saveUserProfile: vi.fn().mockResolvedValue(null),
+    getRankedJobs: vi.fn().mockResolvedValue([]),
+    upsertUser: vi.fn().mockResolvedValue(undefined),
+    getUserByOpenId: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -119,7 +127,7 @@ function makeCtx(overrides: Partial<TrpcContext> = {}): TrpcContext {
 describe("applyKit.list", () => {
   it("returns a list of apply kits for the authenticated user", async () => {
     const caller = appRouter.createCaller(makeCtx());
-    const result = await caller.applyKit.list();
+    const result = await caller.applyKit.list({ limit: 20 });
     expect(Array.isArray(result)).toBe(true);
     expect(result[0]).toMatchObject({ jobTitle: "Senior Software Engineer", company: "Acme Corp" });
   });
@@ -193,18 +201,18 @@ describe("applyKit.generate", () => {
   it("requires jobDescription to be at least 10 characters", async () => {
     const caller = appRouter.createCaller(makeCtx());
     await expect(
-      caller.applyKit.generate({ jobDescription: "short" })
+      caller.applyKit.generate({ jobDescription: "short", jobTitle: "Role", company: "Co" })
     ).rejects.toThrow();
   });
 
   it("rejects jobDescription over 20000 characters", async () => {
     const caller = appRouter.createCaller(makeCtx());
     await expect(
-      caller.applyKit.generate({ jobDescription: "x".repeat(20001) })
+      caller.applyKit.generate({ jobDescription: "x".repeat(20001), jobTitle: "Role", company: "Co" })
     ).rejects.toThrow();
   });
 
-  it("uses default empty strings for optional jobTitle and company", async () => {
+  it("uses explicit jobTitle and company", async () => {
     const { saveApplyKit } = vi.mocked(await import("./db"));
     saveApplyKit.mockResolvedValue({
       id: 100,
@@ -225,6 +233,8 @@ describe("applyKit.generate", () => {
     const caller = appRouter.createCaller(makeCtx());
     const result = await caller.applyKit.generate({
       jobDescription: "A valid job description with enough characters to pass validation.",
+      jobTitle: "the role",
+      company: "the company",
     });
     expect(result).toBeDefined();
     expect(saveApplyKit).toHaveBeenCalledWith(
@@ -262,6 +272,8 @@ describe("applyKit.generate", () => {
     await expect(
       caller.applyKit.generate({
         jobDescription: "A valid job description with enough characters to pass validation.",
+        jobTitle: "Role",
+        company: "Co",
       })
     ).rejects.toThrow();
   });

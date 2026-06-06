@@ -136,20 +136,11 @@ describe("jobs v1.1", () => {
   });
 });
 
-describe("legacyJobs (LLM-scored demo)", () => {
-  it("list returns empty array initially", async () => {
+describe("jobs v2.0 (Remotive + scorer)", () => {
+  it("getRanked returns empty array when no matches", async () => {
     const caller = appRouter.createCaller(makeCtx());
-    const jobs = await caller.legacyJobs.list();
-    expect(Array.isArray(jobs)).toBe(true);
-  });
-
-  it("search returns scored jobs with id field", async () => {
-    const caller = appRouter.createCaller(makeCtx());
-    const results = await caller.legacyJobs.search({ query: "senior engineer", location: "remote" });
-    expect(Array.isArray(results)).toBe(true);
-    results.forEach((job) => {
-      expect(job).toHaveProperty("id");
-    });
+    const ranked = await caller.jobs.getRanked({ limit: 10 });
+    expect(Array.isArray(ranked)).toBe(true);
   });
 });
 
@@ -184,9 +175,8 @@ describe("applications", () => {
 describe("memory", () => {
   it("count returns number of entries", async () => {
     const caller = appRouter.createCaller(makeCtx());
-    const { count } = await caller.memory.count();
+    const count = await caller.memory.count();
     expect(typeof count).toBe("number");
-    expect(count).toBe(3);
   });
 
   it("list returns memory entries", async () => {

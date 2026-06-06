@@ -1,169 +1,78 @@
+/**
+ * client/src/pages/JobsPage.tsx
+ * Job search, import, and apply kit generation — v2.0
+ */
+
+import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
-  BookmarkPlus,
-  Building2,
-  ChevronRight,
-  DollarSign,
-  ExternalLink,
-  FileText,
-  Loader2,
-  MapPin,
-  Search,
-  Sparkles,
-  X,
-  Zap,
+  BookmarkPlus, Building2, ExternalLink, FileText, Globe,
+  Link2, Loader2, MapPin, Search, Sparkles, Star, Zap,
 } from "lucide-react";
-import { useState } from "react";
 import { toast } from "sonner";
 
-export default function JobsPage() {
-  const [query, setQuery] = useState("");
-  const [location, setLocation] = useState("remote");
-  const [selectedJob, setSelectedJob] = useState<any | null>(null);
-  const [coverLetterJob, setCoverLetterJob] = useState<any | null>(null);
+// ── Types ─────────────────────────────────────────────────────────────────────
+type RankedJob = {
+  id: number;
+  matchScore: number | null;
+  matchTier: string | null;
+  job: {
+    id: number;
+    title: string;
+    company: string;
+    location: string;
+    jobType: string | null;
+    description: string | null;
+    requirements: string | null;
+    salaryMin: number | null;
+    salaryMax: number | null;
+    url: string | null;
+    source: string | null;
+  } | null;
+};
 
-  const { data: jobs = [], isLoading: listLoading, refetch } = trpc.legacyJobs.list.useQuery();
-  const search = trpc.legacyJobs.search.useMutation({
-    onSuccess: (data: unknown[]) => {
-      refetch();
-      toast.success(`Scored ${data.length} jobs`);
-    },
-    onError: (e: { message: string }) => toast.error(e.message),
-  });
-  const createApp = trpc.applications.create.useMutation({
-    onSuccess: () => toast.success("Added to applications"),
-    onError: (e) => toast.error(e.message),
-  });
-
-  const handleSearch = () => {
-    if (!query.trim()) { toast.error("Enter a job title to search"); return; }
-    search.mutate({ query: query.trim(), location: location.trim() || "remote" });
-  };
-
-  const isRunning = search.isPending;
-
+// ── Score Badge ───────────────────────────────────────────────────────────────
+function ScoreBadge({ tier, score }: { tier: string | null; score: number | null }) {
+  const pct = Math.round(score ?? 0);
+  const cls =
+    tier === "high"
+      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+      : tier === "medium"
+      ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+      : "bg-red-500/20 text-red-400 border border-red-500/30";
   return (
-    <div className="h-full flex overflow-hidden">
-      {/* ── Left: Job list ── */}
-      <div className={cn("flex flex-col overflow-hidden transition-all duration-200", selectedJob ? "w-[420px] shrink-0 border-r border-border" : "flex-1")}>
-        {/* Search bar */}
-        <div className="p-4 border-b border-border bg-[oklch(0.12_0.005_264)] shrink-0">
-          <div className="flex gap-2 mb-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Job title, role, or keywords..."
-                className="w-full bg-background border border-border rounded-md pl-9 pr-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Location"
-                className="w-32 bg-background border border-border rounded-md pl-9 pr-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            <button
-              onClick={handleSearch}
-              disabled={isRunning}
-              className="flex items-center gap-2 bg-primary text-primary-foreground rounded-md px-4 py-2 text-xs font-mono font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
-            >
-              {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-              {isRunning ? "Scoring..." : "Run Agent"}
-            </button>
-          </div>
-
-          {/* Status bar */}
-          {isRunning && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-primary/10 border border-primary/20">
-              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
-              <span className="font-mono text-[11px] text-primary">
-                Fetching jobs and scoring against your profile...
-              </span>
-            </div>
-          )}
-          {!isRunning && jobs.length > 0 && (
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[11px] text-muted-foreground">{jobs.length} jobs</span>
-              <span className="font-mono text-[11px] text-[oklch(0.72_0.18_145)]">{jobs.filter((j: any) => j.matchTier === "high").length} high match</span>
-              <span className="font-mono text-[11px] text-[oklch(0.78_0.18_75)]">{jobs.filter((j: any) => j.matchTier === "medium").length} medium</span>
-              <span className="font-mono text-[11px] text-[oklch(0.62_0.22_25)]">{jobs.filter((j: any) => j.matchTier === "low").length} low</span>
-            </div>
-          )}
-        </div>
-
-        {/* Job list */}
-        <div className="flex-1 overflow-auto">
-          {listLoading ? (
-            <div className="p-4 space-y-3">
-              {[...Array(4)].map((_, i) => <JobCardSkeleton key={i} />)}
-            </div>
-          ) : jobs.length === 0 ? (
-            <EmptyState onSearch={handleSearch} isRunning={isRunning} />
-          ) : (
-            <div className="p-3 space-y-2">
-              {jobs.map((job: any) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  isSelected={selectedJob?.id === job.id}
-                  onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
-                  onApply={() => createApp.mutate({ jobId: job.id })}
-                  onCoverLetter={() => setCoverLetterJob(job)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Right: Job detail panel ── */}
-      {selectedJob && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-[oklch(0.12_0.005_264)] shrink-0">
-            <div className="flex items-center gap-2">
-              <ScoreBadge tier={selectedJob.matchTier} score={selectedJob.matchScore} />
-              <span className="font-mono text-xs text-foreground font-semibold">{selectedJob.title}</span>
-              <span className="font-mono text-xs text-muted-foreground">@ {selectedJob.company}</span>
-            </div>
-            <button onClick={() => setSelectedJob(null)} className="text-muted-foreground hover:text-foreground transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-auto p-5">
-            <JobDetail
-              job={selectedJob}
-              onApply={() => createApp.mutate({ jobId: selectedJob.id })}
-              onCoverLetter={() => setCoverLetterJob(selectedJob)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── Cover letter modal ── */}
-      {coverLetterJob && (
-        <CoverLetterModal job={coverLetterJob} onClose={() => setCoverLetterJob(null)} />
-      )}
-    </div>
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold shrink-0", cls)}>
+      {pct}%
+    </span>
   );
 }
 
 // ── Job Card ──────────────────────────────────────────────────────────────────
-function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
-  job: any; isSelected: boolean; onClick: () => void; onApply: () => void; onCoverLetter: () => void;
+function JobCard({
+  ranked,
+  isSelected,
+  onClick,
+  onApply,
+  onApplyKit,
+}: {
+  ranked: RankedJob;
+  isSelected: boolean;
+  onClick: () => void;
+  onApply: () => void;
+  onApplyKit: () => void;
 }) {
+  const job = ranked.job;
+  if (!job) return null;
   return (
     <div
       onClick={onClick}
       className={cn(
-        "rounded-lg p-3 cursor-pointer transition-all duration-150 group panel-border",
-        isSelected ? "bg-primary/10 border-primary/50" : "bg-card hover:border-primary/30 hover:bg-card/80"
+        "rounded-lg p-3 cursor-pointer transition-all duration-150 group border",
+        isSelected
+          ? "bg-primary/10 border-primary/50"
+          : "bg-card border-border hover:border-primary/30 hover:bg-card/80"
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -174,10 +83,10 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
             <span className="font-mono text-[11px] text-muted-foreground truncate">{job.company}</span>
           </div>
         </div>
-        <ScoreBadge tier={job.matchTier} score={job.matchScore} />
+        <ScoreBadge tier={ranked.matchTier} score={ranked.matchScore} />
       </div>
 
-      <div className="flex items-center gap-3 mb-2">
+      <div className="flex items-center gap-3 mb-2 flex-wrap">
         {job.location && (
           <div className="flex items-center gap-1">
             <MapPin className="w-3 h-3 text-muted-foreground" />
@@ -185,17 +94,14 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
           </div>
         )}
         {job.jobType && (
-          <span className="font-mono text-[10px] text-muted-foreground">{job.jobType}</span>
+          <span className="font-mono text-[10px] text-muted-foreground capitalize">{job.jobType.replace("_", " ")}</span>
         )}
         {(job.salaryMin || job.salaryMax) && (
-          <div className="flex items-center gap-0.5">
-            <DollarSign className="w-3 h-3 text-muted-foreground" />
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {job.salaryMin ? `${(job.salaryMin / 1000).toFixed(0)}k` : ""}
-              {job.salaryMin && job.salaryMax ? "–" : ""}
-              {job.salaryMax ? `${(job.salaryMax / 1000).toFixed(0)}k` : ""}
-            </span>
-          </div>
+          <span className="font-mono text-[10px] text-emerald-400">
+            {job.salaryMin ? `$${(job.salaryMin / 1000).toFixed(0)}k` : ""}
+            {job.salaryMin && job.salaryMax ? "–" : ""}
+            {job.salaryMax ? `$${(job.salaryMax / 1000).toFixed(0)}k` : ""}
+          </span>
         )}
       </div>
 
@@ -207,24 +113,17 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
 
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
         <button
-          onClick={(e) => { e.stopPropagation(); onCoverLetter(); }}
-          className="flex items-center gap-1 text-[10px] font-mono text-primary hover:underline"
-        >
-          <FileText className="w-3 h-3" /> Cover Letter
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onApply(); }}
-          className="flex items-center gap-1 text-[10px] font-mono text-[oklch(0.72_0.18_145)] hover:underline"
-        >
-          <BookmarkPlus className="w-3 h-3" /> Track
-        </button>
-        <a
-          href={`/apply?title=${encodeURIComponent(job.title ?? "")}&company=${encodeURIComponent(job.company ?? "")}&desc=${encodeURIComponent((job.description ?? "").slice(0, 3000))}`}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onApplyKit(); }}
           className="flex items-center gap-1 text-[10px] font-mono text-amber-400 hover:underline"
         >
           <Sparkles className="w-3 h-3" /> Apply Kit
-        </a>
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onApply(); }}
+          className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 hover:underline"
+        >
+          <BookmarkPlus className="w-3 h-3" /> Track
+        </button>
         {job.url && (
           <a
             href={job.url}
@@ -233,7 +132,7 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
             onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground"
           >
-            <ExternalLink className="w-3 h-3" /> Apply
+            <ExternalLink className="w-3 h-3" /> View
           </a>
         )}
       </div>
@@ -241,177 +140,311 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
   );
 }
 
-// ── Score Badge ───────────────────────────────────────────────────────────────
-function ScoreBadge({ tier, score }: { tier: string; score: number }) {
-  const pct = Math.round((score ?? 0) * 100);
-  return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold shrink-0",
-      tier === "high" ? "badge-high" : tier === "medium" ? "badge-medium" : "badge-low"
-    )}>
-      {pct}%
-    </span>
-  );
-}
+// ── Import Panel ──────────────────────────────────────────────────────────────
+function ImportPanel({ onImported }: { onImported: (job: { title: string; company: string; description: string | null; id: number }) => void }) {
+  const [tab, setTab] = useState<"url" | "paste">("url");
+  const [importUrl, setImportUrl] = useState("");
+  const [pasteTitle, setPasteTitle] = useState("");
+  const [pasteCompany, setPasteCompany] = useState("");
+  const [pasteJD, setPasteJD] = useState("");
 
-// ── Job Detail ────────────────────────────────────────────────────────────────
-function JobDetail({ job, onApply, onCoverLetter }: { job: any; onApply: () => void; onCoverLetter: () => void }) {
+  const urlImport = trpc.jobImport.fromUrl.useMutation({
+    onSuccess: (job) => { toast.success(`Imported: ${job.title}`); setImportUrl(""); onImported(job); },
+    onError: (e) => toast.error(e.message),
+  });
+  const pasteImport = trpc.jobImport.fromText.useMutation({
+    onSuccess: (job) => { toast.success(`Imported: ${job.title}`); setPasteJD(""); setPasteTitle(""); setPasteCompany(""); onImported(job); },
+    onError: (e) => toast.error(e.message),
+  });
+
   return (
-    <div className="space-y-5">
-      {/* Meta */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { label: "company", value: job.company },
-          { label: "location", value: job.location },
-          { label: "type", value: job.jobType },
-          { label: "salary", value: job.salaryMin ? `$${(job.salaryMin / 1000).toFixed(0)}k–$${(job.salaryMax / 1000).toFixed(0)}k` : "Not specified" },
-          { label: "source", value: job.source },
-          { label: "matchScore", value: `${Math.round((job.matchScore ?? 0) * 100)}% (${job.matchTier})` },
-        ].map(({ label, value }) => value && (
-          <div key={label} className="panel-border rounded-md p-2.5 bg-card">
-            <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{label}</p>
-            <p className="font-mono text-xs text-foreground">{value}</p>
-          </div>
-        ))}
+    <div className="p-4 space-y-4">
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setTab("url")}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono transition-colors", tab === "url" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+        >
+          <Link2 className="w-3.5 h-3.5" /> Import URL
+        </button>
+        <button
+          onClick={() => setTab("paste")}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono transition-colors", tab === "paste" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+        >
+          <FileText className="w-3.5 h-3.5" /> Paste JD
+        </button>
       </div>
 
-      {/* Reasoning */}
-      {job.reasoning && (
-        <div className="panel-border rounded-md p-3 bg-primary/5 border-primary/20">
-          <p className="font-mono text-[10px] text-primary uppercase tracking-wider mb-1.5">AI Reasoning</p>
-          <p className="font-mono text-xs text-foreground/80 leading-relaxed">{job.reasoning}</p>
-        </div>
-      )}
-
-      {/* Description */}
-      {job.description && (
-        <div>
-          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Description</p>
-          <p className="font-mono text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{job.description}</p>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex flex-wrap gap-3 pt-2 border-t border-border">
-        <button
-          onClick={onCoverLetter}
-          className="flex items-center gap-2 bg-primary/10 text-primary border border-primary/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-primary/20 transition-colors"
-        >
-          <FileText className="w-3.5 h-3.5" /> View Cover Letter
-        </button>
-        <a
-          href={`/apply?title=${encodeURIComponent(job.title ?? "")}&company=${encodeURIComponent(job.company ?? "")}&desc=${encodeURIComponent((job.description ?? "").slice(0, 3000))}`}
-          className="flex items-center gap-2 bg-amber-400/10 text-amber-400 border border-amber-400/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-amber-400/20 transition-colors"
-        >
-          <Sparkles className="w-3.5 h-3.5" /> Generate Apply Kit
-        </a>
-        <button
-          onClick={onApply}
-          className="flex items-center gap-2 bg-[oklch(0.72_0.18_145)]/10 text-[oklch(0.72_0.18_145)] border border-[oklch(0.72_0.18_145)]/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-[oklch(0.72_0.18_145)]/20 transition-colors"
-        >
-          <BookmarkPlus className="w-3.5 h-3.5" /> Track Application
-        </button>
-        {job.url && (
-          <a
-            href={job.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground border border-border rounded-md px-4 py-2 text-xs font-mono hover:text-foreground hover:border-foreground/30 transition-colors"
+      {tab === "url" ? (
+        <div className="space-y-3">
+          <div>
+            <label className="font-mono text-[11px] text-muted-foreground uppercase tracking-wider block mb-1.5">Job Posting URL</label>
+            <input
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="https://linkedin.com/jobs/view/..."
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+            />
+          </div>
+          <button
+            onClick={() => urlImport.mutate({ url: importUrl })}
+            disabled={!importUrl.startsWith("http") || urlImport.isPending}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-md px-4 py-2 text-xs font-mono font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            <ExternalLink className="w-3.5 h-3.5" /> Apply Externally
-          </a>
-        )}
-      </div>
+            {urlImport.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Extracting...</> : <><Sparkles className="w-3.5 h-3.5" />Import & Generate Apply Kit</>}
+          </button>
+          <p className="font-mono text-[10px] text-muted-foreground">Uses 1 AI credit. Works with LinkedIn, Indeed, Greenhouse, Lever, and most job boards.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="font-mono text-[11px] text-muted-foreground uppercase tracking-wider block mb-1.5">Job Title</label>
+              <input
+                value={pasteTitle}
+                onChange={(e) => setPasteTitle(e.target.value)}
+                placeholder="Senior Engineer"
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="font-mono text-[11px] text-muted-foreground uppercase tracking-wider block mb-1.5">Company</label>
+              <input
+                value={pasteCompany}
+                onChange={(e) => setPasteCompany(e.target.value)}
+                placeholder="Stripe"
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="font-mono text-[11px] text-muted-foreground uppercase tracking-wider block mb-1.5">Job Description</label>
+            <textarea
+              value={pasteJD}
+              onChange={(e) => setPasteJD(e.target.value)}
+              placeholder="Paste the full job description here..."
+              rows={8}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
+            />
+            <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{pasteJD.length} / 20,000</p>
+          </div>
+          <button
+            onClick={() => pasteImport.mutate({ jobDescription: pasteJD, jobTitle: pasteTitle || undefined, company: pasteCompany || undefined })}
+            disabled={pasteJD.length < 50 || pasteImport.isPending}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-md px-4 py-2 text-xs font-mono font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {pasteImport.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating...</> : <><Sparkles className="w-3.5 h-3.5" />Generate Apply Kit</>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Cover Letter Modal ────────────────────────────────────────────────────────
-function CoverLetterModal({ job, onClose }: { job: any; onClose: () => void }) {
-  const handleCopy = () => {
-    navigator.clipboard.writeText(job.coverLetter ?? "");
-    toast.success("Copied to clipboard");
-  };
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function JobsPage() {
+  const [, navigate] = useLocation();
+  const [selectedRanked, setSelectedRanked] = useState<RankedJob | null>(null);
+  const [activeTab, setActiveTab] = useState<"ranked" | "import">("ranked");
+  const [category, setCategory] = useState("");
+
+  const rankedQuery = trpc.jobs.getRanked.useQuery({ limit: 50 });
+  const createApp = trpc.applications.create.useMutation({
+    onSuccess: () => toast.success("Added to applications"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  const refreshMutation = trpc.jobs.refresh.useMutation({
+    onSuccess: () => {
+      toast.success("Jobs fetched — running AI scoring...");
+      scoreMutation.mutate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const scoreMutation = trpc.jobs.scoreJobs.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Scored ${(data as { scored: number }).scored} jobs`);
+      rankedQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function goToApplyKit(job: { title: string; company: string; description: string | null; id: number }) {
+    const params = new URLSearchParams({
+      title: job.title,
+      company: job.company,
+      desc: (job.description ?? "").slice(0, 2000),
+      jobId: job.id.toString(),
+    });
+    navigate(`/apply?${params.toString()}`);
+  }
+
+  const isSearching = refreshMutation.isPending || scoreMutation.isPending;
+  const rankedJobs: RankedJob[] = (rankedQuery.data as RankedJob[] | undefined) ?? [];
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-card panel-border rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
+    <div className="h-full flex overflow-hidden">
+      {/* ── Left panel ── */}
+      <div className={cn("flex flex-col overflow-hidden transition-all duration-200", selectedRanked ? "w-[420px] shrink-0 border-r border-border" : "flex-1")}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-primary" />
-            <span className="font-mono text-xs font-semibold text-foreground">cover_letter.md</span>
-            <span className="font-mono text-xs text-muted-foreground">— {job.title} @ {job.company}</span>
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="p-4 border-b border-border bg-[oklch(0.12_0.005_264)] shrink-0">
+          <div className="flex items-center gap-2 mb-3">
             <button
-              onClick={handleCopy}
-              className="font-mono text-[11px] text-primary hover:underline"
+              onClick={() => setActiveTab("ranked")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono transition-colors", activeTab === "ranked" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
             >
-              Copy
+              <Star className="w-3.5 h-3.5" /> Ranked Jobs ({rankedJobs.length})
             </button>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-              <X className="w-4 h-4" />
+            <button
+              onClick={() => setActiveTab("import")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono transition-colors", activeTab === "import" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              <Link2 className="w-3.5 h-3.5" /> Import Job
             </button>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-5">
-          {job.coverLetter ? (
-            <div className="font-mono text-xs text-foreground/85 leading-7 whitespace-pre-wrap">
-              {job.coverLetter}
+          {activeTab === "ranked" && (
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="Category (e.g. software-dev, design)..."
+                  className="w-full bg-background border border-border rounded-md pl-9 pr-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                />
+              </div>
+              <button
+                onClick={() => refreshMutation.mutate({ category: category || undefined })}
+                disabled={isSearching}
+                className="flex items-center gap-2 bg-primary text-primary-foreground rounded-md px-4 py-2 text-xs font-mono font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
+              >
+                {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                {isSearching ? "Scoring..." : "Fetch & Score"}
+              </button>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-32 gap-2">
-              <FileText className="w-6 h-6 text-muted-foreground" />
-              <p className="font-mono text-xs text-muted-foreground">No cover letter generated. Run the agent to score this job.</p>
+          )}
+
+          {isSearching && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-primary/10 border border-primary/20 mt-2">
+              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
+              <span className="font-mono text-[11px] text-primary">Fetching live jobs from Remotive and scoring against your profile...</span>
             </div>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-// ── Empty State ───────────────────────────────────────────────────────────────
-function EmptyState({ onSearch, isRunning }: { onSearch: () => void; isRunning: boolean }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
-      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-        <Sparkles className="w-6 h-6 text-primary" />
+        {/* Content */}
+        {activeTab === "import" ? (
+          <div className="flex-1 overflow-auto">
+            <ImportPanel onImported={goToApplyKit} />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            {rankedQuery.isLoading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-24 rounded-lg bg-card border border-border animate-pulse" />
+                ))}
+              </div>
+            ) : rankedJobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                <Globe className="w-10 h-10 text-muted-foreground mb-3" />
+                <p className="font-mono text-sm text-muted-foreground">No ranked jobs yet</p>
+                <p className="font-mono text-[11px] text-muted-foreground/60 mt-1 max-w-xs">
+                  Click <strong className="text-primary">Fetch & Score</strong> to pull live remote jobs from Remotive and rank them against your profile.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 space-y-2">
+                {rankedJobs.map((r) => (
+                  <JobCard
+                    key={r.id}
+                    ranked={r}
+                    isSelected={selectedRanked?.id === r.id}
+                    onClick={() => setSelectedRanked(selectedRanked?.id === r.id ? null : r)}
+                    onApply={() => r.job && createApp.mutate({ jobId: r.job.id })}
+                    onApplyKit={() => r.job && goToApplyKit(r.job)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      <div className="text-center">
-        <p className="font-mono text-sm font-semibold text-foreground mb-1">No jobs yet</p>
-        <p className="font-mono text-xs text-muted-foreground max-w-xs">
-          Enter a job title and click "Run Agent" to fetch and score listings against your profile.
-        </p>
-      </div>
-      <button
-        onClick={onSearch}
-        disabled={isRunning}
-        className="flex items-center gap-2 bg-primary text-primary-foreground rounded-md px-4 py-2 text-xs font-mono font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-      >
-        <Zap className="w-3.5 h-3.5" /> Run Agent
-      </button>
-    </div>
-  );
-}
 
-function JobCardSkeleton() {
-  return (
-    <div className="rounded-lg p-3 panel-border bg-card animate-pulse">
-      <div className="flex justify-between mb-2">
-        <div className="space-y-1.5">
-          <div className="h-3 w-40 bg-muted rounded" />
-          <div className="h-2.5 w-24 bg-muted rounded" />
+      {/* ── Right: Detail panel ── */}
+      {selectedRanked?.job && (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-[oklch(0.12_0.005_264)] shrink-0">
+            <div className="flex items-center gap-2">
+              <ScoreBadge tier={selectedRanked.matchTier} score={selectedRanked.matchScore} />
+              <span className="font-mono text-xs text-foreground font-semibold">{selectedRanked.job.title}</span>
+              <span className="font-mono text-xs text-muted-foreground">@ {selectedRanked.job.company}</span>
+            </div>
+            <button onClick={() => setSelectedRanked(null)} className="text-muted-foreground hover:text-foreground transition-colors font-mono text-xs">✕</button>
+          </div>
+          <div className="flex-1 overflow-auto p-5 space-y-5">
+            {/* Meta grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: "company", value: selectedRanked.job.company },
+                { label: "location", value: selectedRanked.job.location },
+                { label: "type", value: selectedRanked.job.jobType?.replace("_", " ") },
+                { label: "salary", value: selectedRanked.job.salaryMin ? `$${(selectedRanked.job.salaryMin / 1000).toFixed(0)}k–$${((selectedRanked.job.salaryMax ?? 0) / 1000).toFixed(0)}k` : null },
+                { label: "match", value: `${selectedRanked.matchScore ?? 0}% (${selectedRanked.matchTier})` },
+                { label: "source", value: selectedRanked.job.source },
+              ].filter((x) => x.value).map(({ label, value }) => (
+                <div key={label} className="rounded-md p-2.5 bg-card border border-border">
+                  <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{label}</p>
+                  <p className="font-mono text-xs text-foreground capitalize">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Description */}
+            {selectedRanked.job.description && (
+              <div>
+                <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Description</p>
+                <p className="font-mono text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{selectedRanked.job.description}</p>
+              </div>
+            )}
+
+            {/* Requirements */}
+            {selectedRanked.job.requirements && (
+              <div>
+                <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Requirements</p>
+                <p className="font-mono text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{selectedRanked.job.requirements}</p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-3 pt-2 border-t border-border">
+              <button
+                onClick={() => selectedRanked.job && goToApplyKit(selectedRanked.job)}
+                className="flex items-center gap-2 bg-amber-400/10 text-amber-400 border border-amber-400/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-amber-400/20 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Generate Apply Kit
+              </button>
+              <button
+                onClick={() => selectedRanked.job && createApp.mutate({ jobId: selectedRanked.job.id })}
+                className="flex items-center gap-2 bg-emerald-400/10 text-emerald-400 border border-emerald-400/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-emerald-400/20 transition-colors"
+              >
+                <BookmarkPlus className="w-3.5 h-3.5" /> Track Application
+              </button>
+              {selectedRanked.job.url && (
+                <a
+                  href={selectedRanked.job.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-muted-foreground border border-border rounded-md px-4 py-2 text-xs font-mono hover:text-foreground hover:border-foreground/30 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Apply Externally
+                </a>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="h-5 w-12 bg-muted rounded" />
-      </div>
-      <div className="h-2.5 w-full bg-muted rounded mb-1" />
-      <div className="h-2.5 w-3/4 bg-muted rounded" />
+      )}
     </div>
   );
 }

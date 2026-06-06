@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function MemoryPage() {
-  const { data: countData } = trpc.memory.count.useQuery();
+  const { data: memoryCount = 0 } = trpc.memory.count.useQuery();
   const { data: entries = [], isLoading, refetch } = trpc.memory.list.useQuery({ limit: 30 });
   const addMemory = trpc.memory.add.useMutation({
     onSuccess: () => { refetch(); toast.success("Memory stored"); setInput(""); setShowAdd(false); },
@@ -49,7 +49,7 @@ export default function MemoryPage() {
         <StatCard
           icon={<BrainCircuit className="w-4 h-4 text-primary" />}
           label="Total Memories"
-          value={countData?.count ?? 0}
+          value={memoryCount}
           color="primary"
         />
         <StatCard
