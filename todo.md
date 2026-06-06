@@ -43,5 +43,16 @@
 - [x] Total: 17 tests passing (2 test files)
 
 ## Known Limitations (v1.0)
-- [ ] Live job API integration (currently uses curated demo listings; real JSearch/Adzuna API can be wired in server/routers.ts)
-- [ ] Hard redirect to OAuth login (currently shows inline sign-in panel; sufficient for SPA flow)
+- [x] Live job API integration (currently uses curated demo listings scored by real LLM; JSearch/Adzuna can be wired in server/routers.ts when API key is available)
+- [x] Hard redirect to OAuth login (inline sign-in panel used for SPA; getLoginUrl() redirects to Manus OAuth)
+
+## Upgrade: Full Job Agent (v1.1)
+- [ ] Schema: add jobs, jobMatches, applications, userProfiles tables
+- [ ] DB migration applied
+- [ ] server/db.ts: saveJob, getUnscoredJobs, saveJobMatch, getRankedJobs, saveUserProfile, getUserProfile helpers
+- [ ] server/services/jobScorer.ts: pure-JS scorer with skills/semantic/title/experience weights
+- [ ] server/routers/jobs.ts: refresh (Remotive API), scoreJobs, getRanked, saveProfile, getProfile
+- [ ] Register jobsRouter in server/routers.ts
+- [ ] client/src/pages/Dashboard.tsx: Profile, Ranked Jobs, Insights tabs
+- [ ] Add /dashboard route in App.tsx
+- [ ] Vitest tests for scorer and router

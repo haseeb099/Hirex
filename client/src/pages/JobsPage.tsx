@@ -23,13 +23,13 @@ export default function JobsPage() {
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [coverLetterJob, setCoverLetterJob] = useState<any | null>(null);
 
-  const { data: jobs = [], isLoading: listLoading, refetch } = trpc.jobs.list.useQuery();
-  const search = trpc.jobs.search.useMutation({
-    onSuccess: (data) => {
+  const { data: jobs = [], isLoading: listLoading, refetch } = trpc.legacyJobs.list.useQuery();
+  const search = trpc.legacyJobs.search.useMutation({
+    onSuccess: (data: unknown[]) => {
       refetch();
       toast.success(`Scored ${data.length} jobs`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
   const createApp = trpc.applications.create.useMutation({
     onSuccess: () => toast.success("Added to applications"),

@@ -6,6 +6,7 @@ import {
   Briefcase,
   ChevronRight,
   ClipboardList,
+  LayoutDashboard,
   LogOut,
   User,
   Zap,
@@ -14,10 +15,11 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 
 const NAV_ITEMS = [
-  { href: "/jobs",         icon: Briefcase,     label: "Jobs",         shortcut: "J" },
-  { href: "/applications", icon: ClipboardList, label: "Applications", shortcut: "A" },
-  { href: "/profile",      icon: User,          label: "Profile",      shortcut: "P" },
-  { href: "/memory",       icon: BrainCircuit,  label: "Memory",       shortcut: "M" },
+  { href: "/dashboard",    icon: LayoutDashboard, label: "Dashboard",    shortcut: "D" },
+  { href: "/jobs",         icon: Briefcase,       label: "Jobs",         shortcut: "J" },
+  { href: "/applications", icon: ClipboardList,   label: "Applications", shortcut: "A" },
+  { href: "/profile",      icon: User,            label: "Profile",      shortcut: "P" },
+  { href: "/memory",       icon: BrainCircuit,    label: "Memory",       shortcut: "M" },
 ];
 
 export default function IDELayout({ children }: { children: ReactNode }) {

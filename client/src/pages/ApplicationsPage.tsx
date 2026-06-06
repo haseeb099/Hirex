@@ -13,15 +13,24 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
-const STATUSES = ["Draft", "Applied", "Interview", "Offer", "Rejected"] as const;
+const STATUSES = ["draft", "applied", "interviewing", "rejected", "offer"] as const;
 type AppStatus = typeof STATUSES[number];
 
+// Display labels for the UI
+const STATUS_LABELS: Record<AppStatus, string> = {
+  draft: "Draft",
+  applied: "Applied",
+  interviewing: "Interview",
+  rejected: "Rejected",
+  offer: "Offer",
+};
+
 const STATUS_CONFIG: Record<AppStatus, { color: string; bg: string; border: string; dot: string }> = {
-  Draft:     { color: "text-muted-foreground",                bg: "bg-muted/30",                     border: "border-muted",                      dot: "bg-muted-foreground" },
-  Applied:   { color: "text-[oklch(0.65_0.18_264)]",          bg: "bg-[oklch(0.65_0.18_264)]/10",    border: "border-[oklch(0.65_0.18_264)]/30",  dot: "bg-[oklch(0.65_0.18_264)]" },
-  Interview: { color: "text-[oklch(0.78_0.18_75)]",           bg: "bg-[oklch(0.78_0.18_75)]/10",     border: "border-[oklch(0.78_0.18_75)]/30",   dot: "bg-[oklch(0.78_0.18_75)]" },
-  Offer:     { color: "text-[oklch(0.72_0.18_145)]",          bg: "bg-[oklch(0.72_0.18_145)]/10",    border: "border-[oklch(0.72_0.18_145)]/30",  dot: "bg-[oklch(0.72_0.18_145)]" },
-  Rejected:  { color: "text-[oklch(0.62_0.22_25)]",           bg: "bg-[oklch(0.62_0.22_25)]/10",     border: "border-[oklch(0.62_0.22_25)]/30",   dot: "bg-[oklch(0.62_0.22_25)]" },
+  draft:       { color: "text-muted-foreground",                bg: "bg-muted/30",                     border: "border-muted",                      dot: "bg-muted-foreground" },
+  applied:     { color: "text-[oklch(0.65_0.18_264)]",          bg: "bg-[oklch(0.65_0.18_264)]/10",    border: "border-[oklch(0.65_0.18_264)]/30",  dot: "bg-[oklch(0.65_0.18_264)]" },
+  interviewing:{ color: "text-[oklch(0.78_0.18_75)]",           bg: "bg-[oklch(0.78_0.18_75)]/10",     border: "border-[oklch(0.78_0.18_75)]/30",   dot: "bg-[oklch(0.78_0.18_75)]" },
+  offer:       { color: "text-[oklch(0.72_0.18_145)]",          bg: "bg-[oklch(0.72_0.18_145)]/10",    border: "border-[oklch(0.72_0.18_145)]/30",  dot: "bg-[oklch(0.72_0.18_145)]" },
+  rejected:    { color: "text-[oklch(0.62_0.22_25)]",           bg: "bg-[oklch(0.62_0.22_25)]/10",     border: "border-[oklch(0.62_0.22_25)]/30",   dot: "bg-[oklch(0.62_0.22_25)]" },
 };
 
 export default function ApplicationsPage() {
@@ -33,7 +42,7 @@ export default function ApplicationsPage() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editNotes, setEditNotes] = useState("");
-  const [editStatus, setEditStatus] = useState<AppStatus>("Draft");
+  const [editStatus, setEditStatus] = useState<AppStatus>("draft");
 
   const startEdit = (app: any) => {
     setEditingId(app.id);

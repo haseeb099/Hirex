@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   applications,
@@ -6,10 +6,14 @@ import {
   InsertApplication,
   InsertCandidateProfile,
   InsertJob,
+  InsertJobMatch,
   InsertMemoryEntry,
   InsertUser,
+  InsertUserProfile,
+  jobMatches,
   jobs,
   memoryEntries,
+  userProfiles,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -60,7 +64,30 @@ export async function getUserByOpenId(openId: string) {
   return result[0];
 }
 
-// ── Candidate Profile ─────────────────────────────────────────────────────────
+// ── User Profiles (v1.1) ──────────────────────────────────────────────────────
+export async function getUserProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function saveUserProfile(data: InsertUserProfile) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(userProfiles).values(data).onDuplicateKeyUpdate({
+    set: {
+      skills: data.skills,
+      experienceYears: data.experienceYears,
+      resumeText: data.resumeText,
+      headline: data.headline,
+      preferences: data.preferences,
+    },
+  });
+  return getUserProfile(data.userId);
+}
+
+// ── Candidate Profile (legacy v1.0) ───────────────────────────────────────────
 export async function getProfile(userId: number) {
   const db = await getDb();
   if (!db) return null;
@@ -86,27 +113,83 @@ export async function upsertProfile(data: InsertCandidateProfile) {
   return getProfile(data.userId);
 }
 
-// ── Jobs ──────────────────────────────────────────────────────────────────────
-export async function insertJob(data: InsertJob) {
+// ── Jobs (global pool, v1.1) ──────────────────────────────────────────────────
+
+/** Save a job, checking for duplicate by URL. Returns the saved or existing job. */
+export async function saveJob(data: InsertJob) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
+
+  // Check for duplicate by URL
+  if (data.url) {
+    const existing = await db.select().from(jobs).where(eq(jobs.url, data.url)).limit(1);
+    if (existing[0]) return existing[0];
+  }
+
   const [result] = await db.insert(jobs).values(data);
   const insertId = (result as any).insertId as number;
   const rows = await db.select().from(jobs).where(eq(jobs.id, insertId)).limit(1);
-  return rows[0];
+  return rows[0]!;
 }
 
-export async function getJobsByUser(userId: number) {
+/** Get all jobs not yet scored for this user (no job_match record exists). */
+export async function getUnscoredJobs(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(jobs).where(eq(jobs.userId, userId)).orderBy(desc(jobs.fetchedAt));
+  // LEFT JOIN job_matches for this user; return jobs where match is null
+  const allJobs = await db.select().from(jobs).where(eq(jobs.isActive, true));
+  const userMatchRows = await db.select({ jobId: jobMatches.jobId }).from(jobMatches).where(eq(jobMatches.userId, userId));
+  const scoredIds = new Set(userMatchRows.map((r) => r.jobId));
+  return allJobs.filter((j) => !scoredIds.has(j.id));
 }
 
-export async function getJobById(id: number, userId: number) {
+/** Save a job match record for a user. */
+export async function saveJobMatch(data: InsertJobMatch) {
   const db = await getDb();
-  if (!db) return null;
-  const rows = await db.select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.userId, userId))).limit(1);
-  return rows[0] ?? null;
+  if (!db) throw new Error("DB unavailable");
+  const [result] = await db.insert(jobMatches).values(data);
+  const insertId = (result as any).insertId as number;
+  const rows = await db.select().from(jobMatches).where(eq(jobMatches.id, insertId)).limit(1);
+  return rows[0]!;
+}
+
+/** Get ranked jobs for a user, enriched with job details, ordered by matchScore desc. */
+export async function getRankedJobs(userId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  const matches = await db
+    .select()
+    .from(jobMatches)
+    .where(eq(jobMatches.userId, userId))
+    .orderBy(desc(jobMatches.matchScore))
+    .limit(limit);
+
+  if (!matches.length) return [];
+
+  // Enrich with job details
+  const jobIds = matches.map((m) => m.jobId);
+  const jobRows = await db.select().from(jobs).where(sql`${jobs.id} IN (${sql.join(jobIds.map((id) => sql`${id}`), sql`, `)})`);
+  const jobMap = new Map(jobRows.map((j) => [j.id, j]));
+
+  return matches.map((m) => ({
+    ...m,
+    job: jobMap.get(m.jobId) ?? null,
+  })).filter((m) => m.job !== null);
+}
+
+// ── Legacy job helpers (v1.0 compat) ─────────────────────────────────────────
+export async function getJobsByUser(userId: number) {
+  // In v1.1 jobs are global; return jobs that have a match for this user
+  const db = await getDb();
+  if (!db) return [];
+  const ranked = await getRankedJobs(userId, 100);
+  return ranked.map((r) => ({
+    ...r.job!,
+    matchScore: (r.matchScore ?? 0) / 100,
+    matchTier: (r.matchScore ?? 0) >= 70 ? "high" : (r.matchScore ?? 0) >= 45 ? "medium" : "low",
+    reasoning: null as string | null,
+    coverLetter: null as string | null,
+  }));
 }
 
 // ── Applications ──────────────────────────────────────────────────────────────
@@ -128,14 +211,14 @@ export async function getApplicationsByUser(userId: number) {
 export async function updateApplicationStatus(
   id: number,
   userId: number,
-  status: "Draft" | "Applied" | "Interview" | "Offer" | "Rejected",
+  status: string,
   notes?: string
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   const updateData: Record<string, unknown> = { status };
   if (notes !== undefined) updateData.notes = notes;
-  if (status === "Applied") updateData.appliedAt = new Date();
+  if (status === "applied") updateData.appliedAt = new Date();
   await db.update(applications).set(updateData).where(and(eq(applications.id, id), eq(applications.userId, userId)));
   const rows = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
   return rows[0];

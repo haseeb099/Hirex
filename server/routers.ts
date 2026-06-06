@@ -14,15 +14,16 @@ import {
   getMemoryEntries,
   getProfile,
   getRecentMemoryContext,
-  insertJob,
+  saveJob,
   updateApplicationStatus,
   upsertProfile,
 } from "./db";
+import { jobsRouter } from "./routers/jobs";
 
-// ── Shared types ──────────────────────────────────────────────────────────────
-const APPLICATION_STATUSES = ["Draft", "Applied", "Interview", "Offer", "Rejected"] as const;
+// ── Application status (lowercase to match updated schema) ────────────────────
+const APPLICATION_STATUSES = ["draft", "applied", "interviewing", "rejected", "offer"] as const;
 
-// ── LLM helpers ───────────────────────────────────────────────────────────────
+// ── LLM job scoring helper ────────────────────────────────────────────────────
 async function scoreJobWithLLM(
   jobTitle: string,
   jobDescription: string,
@@ -73,7 +74,7 @@ ${memoryContext ? `RELEVANT PAST EXPERIENCE (from memory):\n${memoryContext}` : 
   }
 }
 
-// Sample jobs for demo (when no external API is configured)
+// ── Sample jobs for demo (legacy search flow) ─────────────────────────────────
 function generateSampleJobs(query: string, location: string) {
   const roles = [
     { title: `Senior ${query}`, company: "Stripe", jobType: "Full-time", salaryMin: 160000, salaryMax: 220000 },
@@ -99,17 +100,18 @@ function generateSampleJobs(query: string, location: string) {
     company: r.company,
     location: location || "Remote",
     jobType: r.jobType,
-    description: descriptions[i % descriptions.length],
+    description: descriptions[i % descriptions.length]!,
     requirements: "5+ years of software engineering experience, strong TypeScript/JavaScript skills, experience with distributed systems, excellent communication skills.",
     salaryMin: r.salaryMin,
     salaryMax: r.salaryMax,
     salaryCurrency: "USD",
-    url: `https://example.com/jobs/${i}`,
+    url: `https://example.com/jobs/${r.company.toLowerCase()}-${i}-${Date.now()}`,
     source: "demo",
+    isActive: true as const,
   }));
 }
 
-// ── Router ────────────────────────────────────────────────────────────────────
+// ── App Router ────────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
 
@@ -122,7 +124,10 @@ export const appRouter = router({
     }),
   }),
 
-  // ── Profile ──────────────────────────────────────────────────────────────
+  // ── v1.1 Jobs router (Remotive + scorer) ──────────────────────────────────
+  jobs: jobsRouter,
+
+  // ── Legacy profile (v1.0 candidate_profiles table) ────────────────────────
   profile: router({
     get: protectedProcedure.query(async ({ ctx }) => {
       return getProfile(ctx.user.id);
@@ -146,8 +151,8 @@ export const appRouter = router({
       }),
   }),
 
-  // ── Jobs ──────────────────────────────────────────────────────────────────
-  jobs: router({
+  // ── Legacy job search (LLM-scored demo jobs) ──────────────────────────────
+  legacyJobs: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return getJobsByUser(ctx.user.id);
     }),
@@ -185,18 +190,17 @@ Resume summary: ${(profile.resumeText ?? "").slice(0, 1000)}`
               profileSummary,
               memoryContext
             );
-            return insertJob({
-              userId: ctx.user.id,
+            return saveJob({
               ...raw,
-              matchScore: scoring.score,
-              matchTier: scoring.tier,
-              reasoning: scoring.reasoning,
-              coverLetter: scoring.coverLetter,
+              // Store score info in description suffix for legacy display
+              description: `${raw.description}\n\n[Score: ${(scoring.score * 100).toFixed(0)}% | ${scoring.tier}]\n${scoring.reasoning}`,
             });
           })
         );
 
-        return scored.filter(Boolean).sort((a, b) => (b!.matchScore ?? 0) - (a!.matchScore ?? 0));
+        return scored
+          .filter(Boolean)
+          .sort((a, b) => (b?.id ?? 0) - (a?.id ?? 0));
       }),
   }),
 
@@ -212,7 +216,7 @@ Resume summary: ${(profile.resumeText ?? "").slice(0, 1000)}`
     create: protectedProcedure
       .input(z.object({ jobId: z.number().int() }))
       .mutation(async ({ ctx, input }) => {
-        return createApplication({ userId: ctx.user.id, jobId: input.jobId, status: "Draft" });
+        return createApplication({ userId: ctx.user.id, jobId: input.jobId, status: "draft" });
       }),
 
     updateStatus: protectedProcedure
@@ -227,16 +231,16 @@ Resume summary: ${(profile.resumeText ?? "").slice(0, 1000)}`
         const updated = await updateApplicationStatus(input.id, ctx.user.id, input.status, input.notes);
         if (!updated) throw new TRPCError({ code: "NOT_FOUND" });
 
-        // Store outcome in memory when reaching a terminal state
-        if (input.status === "Offer" || input.status === "Rejected" || input.status === "Interview") {
+        // Store outcome in memory on significant status transitions
+        if (input.status === "offer" || input.status === "rejected" || input.status === "interviewing") {
           const jobsList = await getJobsByUser(ctx.user.id);
           const job = jobsList.find((j) => j.id === updated.jobId);
           if (job) {
             await addMemoryEntry({
               userId: ctx.user.id,
-              content: `Application for "${job.title}" at ${job.company} (${job.location}) reached status: ${input.status}. Match score was ${((job.matchScore ?? 0) * 100).toFixed(0)}%. ${input.notes ? `Notes: ${input.notes}` : ""}`,
+              content: `Application for "${job.title}" at ${job.company} (${job.location}) reached status: ${input.status}. ${input.notes ? `Notes: ${input.notes}` : ""}`,
               memoryType: "application_outcome",
-              metadata: { jobId: job.id, status: input.status, matchScore: job.matchScore },
+              metadata: { jobId: job.id, status: input.status },
             });
           }
         }
