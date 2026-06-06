@@ -98,7 +98,7 @@ function generateSampleJobs(query: string, location: string) {
   ];
 
   return roles.map((r, i) => ({
-    externalId: `demo-${Date.now()}-${i}`,
+    externalId: `demo-${r.company.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`,
     title: r.title,
     company: r.company,
     location: location || "Remote",
@@ -108,7 +108,7 @@ function generateSampleJobs(query: string, location: string) {
     salaryMin: r.salaryMin,
     salaryMax: r.salaryMax,
     salaryCurrency: "USD",
-    url: `https://example.com/jobs/${r.company.toLowerCase()}-${i}-${Date.now()}`,
+    url: `https://example.com/jobs/${r.company.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`.slice(0, 768),
     source: "demo",
     isActive: true as const,
   }));

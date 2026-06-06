@@ -74,7 +74,7 @@ export const jobs = mysqlTable("jobs", {
   salaryMin:      int("salaryMin"),
   salaryMax:      int("salaryMax"),
   salaryCurrency: varchar("salaryCurrency", { length: 10 }).default("USD"),
-  url:            varchar("url", { length: 2048 }).unique(),
+  url:            varchar("url", { length: 768 }).unique(),
   source:         varchar("source", { length: 100 }).default("remotive"),
   postedDate:     timestamp("postedDate"),
   isActive:       boolean("isActive").default(true),
