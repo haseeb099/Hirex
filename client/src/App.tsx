@@ -11,6 +11,7 @@ import ProfilePage from "./pages/ProfilePage";
 import MemoryPage from "./pages/MemoryPage";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
+import ApplyPage from "./pages/ApplyPage";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/profile" component={() => <IDELayout><ProfilePage /></IDELayout>} />
       <Route path="/memory" component={() => <IDELayout><MemoryPage /></IDELayout>} />
       <Route path="/dashboard" component={() => <IDELayout><Dashboard /></IDELayout>} />
+      <Route path="/apply" component={() => <IDELayout><ApplyPage /></IDELayout>} />
       <Route component={NotFound} />
     </Switch>
   );

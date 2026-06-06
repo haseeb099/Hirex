@@ -56,3 +56,20 @@
 - [x] client/src/pages/Dashboard.tsx: Profile, Ranked Jobs, Insights tabs
 - [x] Add /dashboard route in App.tsx
 - [x] Vitest tests for scorer and router (21 tests passing, 2 test files)
+
+## v1.2 — Apply Materials System
+- [x] Fix all current errors (Vite stale cache, runtime insertJob, TS)
+- [x] tRPC procedure: analyzeJobDescription (paste text or URL → extract JD)
+- [x] tRPC procedure: generateApplyKit (ATS CV, cover letter, LinkedIn summary, interview prep)
+- [x] ATS-optimised CV generator: reorders/rewrites resume bullets to match JD keywords
+- [x] Tailored cover letter: 3-paragraph, company-specific, keyword-rich
+- [x] LinkedIn summary: 3-5 sentence "About" section optimised for the role
+- [x] Interview prep: 5 likely questions + suggested answers based on JD + profile
+- [x] ApplyPage: JD paste textarea + URL input with "Analyse" button
+- [x] ApplyPage: Apply Kit panel with tabs (CV / Cover Letter / LinkedIn / Interview Prep)
+- [x] Copy-to-clipboard for each section
+- [x] Download as .txt for each section
+- [x] "Generate Apply Kit" button on each ranked job card in Dashboard
+- [x] "Generate Apply Kit" button on each job card in Jobs page
+- [x] Match score badge shown on ApplyPage for the analysed job
+- [x] Vitest tests for generateApplyKit procedure (34 tests passing, 3 files)

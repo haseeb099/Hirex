@@ -123,6 +123,26 @@ export const applications = mysqlTable("applications", {
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = typeof applications.$inferInsert;
 
+// ── Apply Kits (AI-generated application materials) ─────────────────────────
+export const applyKits = mysqlTable("apply_kits", {
+  id:               int("id").autoincrement().primaryKey(),
+  userId:           int("userId").notNull(),
+  jobId:            int("jobId"),
+  jobTitle:         varchar("jobTitle", { length: 255 }),
+  company:          varchar("company", { length: 255 }),
+  jobDescription:   text("jobDescription"),
+  atsCV:            text("atsCV"),
+  coverLetter:      text("coverLetter"),
+  linkedinSummary:  text("linkedinSummary"),
+  interviewPrep:    text("interviewPrep"),
+  matchScore:       int("matchScore").default(0),
+  createdAt:        timestamp("createdAt").defaultNow().notNull(),
+  updatedAt:        timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ApplyKit = typeof applyKits.$inferSelect;
+export type InsertApplyKit = typeof applyKits.$inferInsert;
+
 // ── Memory Entries ────────────────────────────────────────────────────────────
 export const memoryEntries = mysqlTable("memory_entries", {
   id:         int("id").autoincrement().primaryKey(),

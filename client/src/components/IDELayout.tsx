@@ -8,6 +8,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   LogOut,
+  Sparkles,
   User,
   Zap,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { Link, useLocation } from "wouter";
 const NAV_ITEMS = [
   { href: "/dashboard",    icon: LayoutDashboard, label: "Dashboard",    shortcut: "D" },
   { href: "/jobs",         icon: Briefcase,       label: "Jobs",         shortcut: "J" },
+  { href: "/apply",        icon: Sparkles,        label: "Apply Kit",    shortcut: "K" },
   { href: "/applications", icon: ClipboardList,   label: "Applications", shortcut: "A" },
   { href: "/profile",      icon: User,            label: "Profile",      shortcut: "P" },
   { href: "/memory",       icon: BrainCircuit,    label: "Memory",       shortcut: "M" },

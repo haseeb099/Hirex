@@ -336,17 +336,25 @@ function RankedJobsTab({ onRefresh, isRefreshing }: { onRefresh: () => void; isR
                   </p>
                 )}
 
-                {/* View job */}
-                {item.job.url && (
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {item.job.url && (
+                    <a
+                      href={item.job.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 border border-primary/30 text-xs font-mono text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" /> view_job()
+                    </a>
+                  )}
                   <a
-                    href={item.job.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 border border-primary/30 text-xs font-mono text-primary hover:bg-primary/20 transition-colors"
+                    href={`/apply?title=${encodeURIComponent(item.job.title)}&company=${encodeURIComponent(item.job.company)}&desc=${encodeURIComponent((item.job.description ?? "").slice(0, 3000))}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[oklch(0.72_0.18_145)]/10 border border-[oklch(0.72_0.18_145)]/30 text-xs font-mono text-[oklch(0.72_0.18_145)] hover:bg-[oklch(0.72_0.18_145)]/20 transition-colors"
                   >
-                    <ExternalLink className="w-3 h-3" /> view_job()
+                    <Sparkles className="w-3 h-3" /> generate_apply_kit()
                   </a>
-                )}
+                </div>
               </div>
             )}
           </div>

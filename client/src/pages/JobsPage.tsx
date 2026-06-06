@@ -205,7 +205,7 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
         </p>
       )}
 
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
         <button
           onClick={(e) => { e.stopPropagation(); onCoverLetter(); }}
           className="flex items-center gap-1 text-[10px] font-mono text-primary hover:underline"
@@ -218,6 +218,13 @@ function JobCard({ job, isSelected, onClick, onApply, onCoverLetter }: {
         >
           <BookmarkPlus className="w-3 h-3" /> Track
         </button>
+        <a
+          href={`/apply?title=${encodeURIComponent(job.title ?? "")}&company=${encodeURIComponent(job.company ?? "")}&desc=${encodeURIComponent((job.description ?? "").slice(0, 3000))}`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1 text-[10px] font-mono text-amber-400 hover:underline"
+        >
+          <Sparkles className="w-3 h-3" /> Apply Kit
+        </a>
         {job.url && (
           <a
             href={job.url}
@@ -284,13 +291,19 @@ function JobDetail({ job, onApply, onCoverLetter }: { job: any; onApply: () => v
       )}
 
       {/* Actions */}
-      <div className="flex gap-3 pt-2 border-t border-border">
+      <div className="flex flex-wrap gap-3 pt-2 border-t border-border">
         <button
           onClick={onCoverLetter}
           className="flex items-center gap-2 bg-primary/10 text-primary border border-primary/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-primary/20 transition-colors"
         >
           <FileText className="w-3.5 h-3.5" /> View Cover Letter
         </button>
+        <a
+          href={`/apply?title=${encodeURIComponent(job.title ?? "")}&company=${encodeURIComponent(job.company ?? "")}&desc=${encodeURIComponent((job.description ?? "").slice(0, 3000))}`}
+          className="flex items-center gap-2 bg-amber-400/10 text-amber-400 border border-amber-400/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-amber-400/20 transition-colors"
+        >
+          <Sparkles className="w-3.5 h-3.5" /> Generate Apply Kit
+        </a>
         <button
           onClick={onApply}
           className="flex items-center gap-2 bg-[oklch(0.72_0.18_145)]/10 text-[oklch(0.72_0.18_145)] border border-[oklch(0.72_0.18_145)]/30 rounded-md px-4 py-2 text-xs font-mono font-semibold hover:bg-[oklch(0.72_0.18_145)]/20 transition-colors"

@@ -2,8 +2,10 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   applications,
+  applyKits,
   candidateProfiles,
   InsertApplication,
+  InsertApplyKit,
   InsertCandidateProfile,
   InsertJob,
   InsertJobMatch,
@@ -248,4 +250,27 @@ export async function getRecentMemoryContext(userId: number, limit = 5): Promise
   const entries = await getMemoryEntries(userId, limit);
   if (!entries.length) return "";
   return entries.map((e, i) => `${i + 1}. ${e.content}`).join("\n");
+}
+
+// ── Apply Kits ────────────────────────────────────────────────────────────
+export async function saveApplyKit(data: InsertApplyKit) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [result] = await db.insert(applyKits).values(data);
+  const insertId = (result as any).insertId as number;
+  const rows = await db.select().from(applyKits).where(eq(applyKits.id, insertId)).limit(1);
+  return rows[0]!;
+}
+
+export async function getApplyKitsByUser(userId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(applyKits).where(eq(applyKits.userId, userId)).orderBy(desc(applyKits.createdAt)).limit(limit);
+}
+
+export async function getApplyKitById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(applyKits).where(and(eq(applyKits.id, id), eq(applyKits.userId, userId))).limit(1);
+  return rows[0] ?? null;
 }

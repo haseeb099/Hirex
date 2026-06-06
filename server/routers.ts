@@ -10,10 +10,13 @@ import {
   countMemoryEntries,
   createApplication,
   getApplicationsByUser,
+  getApplyKitById,
+  getApplyKitsByUser,
   getJobsByUser,
   getMemoryEntries,
   getProfile,
   getRecentMemoryContext,
+  saveApplyKit,
   saveJob,
   updateApplicationStatus,
   upsertProfile,
@@ -245,6 +248,97 @@ Resume summary: ${(profile.resumeText ?? "").slice(0, 1000)}`
           }
         }
         return updated;
+      }),
+  }),
+
+  // ── Apply Kit (AI-generated application materials) ──────────────────────
+  applyKit: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return getApplyKitsByUser(ctx.user.id);
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .query(async ({ ctx, input }) => {
+        return getApplyKitById(input.id, ctx.user.id);
+      }),
+
+    generate: protectedProcedure
+      .input(
+        z.object({
+          jobDescription: z.string().min(10).max(20000),
+          jobTitle: z.string().max(255).optional().default(""),
+          company: z.string().max(255).optional().default(""),
+          jobId: z.number().int().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getProfile(ctx.user.id);
+        const memoryContext = await getRecentMemoryContext(ctx.user.id, 5);
+
+        const profileSummary = profile
+          ? `Full Name: ${profile.fullName ?? "Candidate"}
+Headline: ${profile.headline ?? ""}
+Skills: ${(profile.skills as string[] | null)?.join(", ") ?? "Not specified"}
+Experience: ${profile.experienceYears ?? 0} years
+Preferred Roles: ${(profile.preferredRoles as string[] | null)?.join(", ") ?? "Any"}
+Target Salary: ${profile.targetSalary ? `$${profile.targetSalary.toLocaleString()}` : "Flexible"}
+Resume:\n${(profile.resumeText ?? "").slice(0, 3000)}`
+          : "No profile set up yet. Please complete your profile first.";
+
+        const jd = input.jobDescription.slice(0, 6000);
+        const jobTitle = input.jobTitle || "the role";
+        const company = input.company || "the company";
+
+        const [atsCVRes, coverLetterRes, linkedinRes, interviewRes] = await Promise.all([
+          invokeLLM({
+            messages: [
+              { role: "system", content: "You are an expert ATS resume writer. Rewrite the candidate's resume to maximise keyword match with the job description. Mirror exact keywords from the JD; use strong action verbs; quantify achievements; keep to 1 page equivalent; use section headers: SUMMARY, EXPERIENCE, SKILLS, EDUCATION. Do NOT fabricate experience. Output plain text only." },
+              { role: "user", content: `JOB TITLE: ${jobTitle}\nCOMPANY: ${company}\n\nJOB DESCRIPTION:\n${jd}\n\nCANDIDATE PROFILE:\n${profileSummary}${memoryContext ? `\n\nPAST APPLICATION OUTCOMES:\n${memoryContext}` : ""}` },
+            ],
+          }),
+          invokeLLM({
+            messages: [
+              { role: "system", content: "You are an expert career coach writing ATS-friendly cover letters. Write a 3-paragraph cover letter: (1) Opening - why this company and role excites the candidate. (2) Body - 2-3 concrete achievements that address the JD requirements. (3) Closing - confident call to action. Use the candidate's name. Mirror JD keywords. Under 350 words. Output plain text only." },
+              { role: "user", content: `JOB TITLE: ${jobTitle}\nCOMPANY: ${company}\n\nJOB DESCRIPTION:\n${jd}\n\nCANDIDATE PROFILE:\n${profileSummary}` },
+            ],
+          }),
+          invokeLLM({
+            messages: [
+              { role: "system", content: "You are a LinkedIn profile expert. Write a 3-5 sentence LinkedIn About section optimised for the target role. Open with a strong hook; highlight 2-3 key skills from the JD; mention a notable achievement; end with what the candidate is seeking. Conversational, first-person, under 200 words. Output plain text only." },
+              { role: "user", content: `TARGET ROLE: ${jobTitle} at ${company}\n\nJOB DESCRIPTION:\n${jd.slice(0, 2000)}\n\nCANDIDATE PROFILE:\n${profileSummary}` },
+            ],
+          }),
+          invokeLLM({
+            messages: [
+              { role: "system", content: "You are an expert interview coach. Generate exactly 5 likely interview questions with suggested answers. Format:\nQ1: [question]\nA1: [2-3 sentence answer using STAR method, referencing the candidate's actual experience]\n\nQ2: ...\n\nMake questions specific to the JD. Output plain text only." },
+              { role: "user", content: `JOB TITLE: ${jobTitle}\nCOMPANY: ${company}\n\nJOB DESCRIPTION:\n${jd}\n\nCANDIDATE PROFILE:\n${profileSummary}` },
+            ],
+          }),
+        ]);
+
+        const atsCV = (atsCVRes.choices[0]?.message?.content as string) ?? "";
+        const coverLetter = (coverLetterRes.choices[0]?.message?.content as string) ?? "";
+        const linkedinSummary = (linkedinRes.choices[0]?.message?.content as string) ?? "";
+        const interviewPrep = (interviewRes.choices[0]?.message?.content as string) ?? "";
+
+        const jdWords = new Set(jd.toLowerCase().split(/\W+/).filter((w) => w.length > 3));
+        const resumeWords = profileSummary.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+        const matchCount = resumeWords.filter((w) => jdWords.has(w)).length;
+        const matchScore = Math.min(100, Math.round((matchCount / Math.max(jdWords.size, 1)) * 200));
+
+        return saveApplyKit({
+          userId: ctx.user.id,
+          jobId: input.jobId,
+          jobTitle,
+          company,
+          jobDescription: input.jobDescription,
+          atsCV,
+          coverLetter,
+          linkedinSummary,
+          interviewPrep,
+          matchScore,
+        });
       }),
   }),
 
